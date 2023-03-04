@@ -1,0 +1,1 @@
+g++ main.cpp -g -fsanitize=address -Wall -Wextra -Wno-sign-compare -Wshadow -ggdb3 -Don_local -std=c++17 -o exeOut
