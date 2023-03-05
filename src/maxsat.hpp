@@ -36,19 +36,19 @@ const Value VAR_FALSE = 0;
     AssignmentHeuristics
 */
 
-void assignAtRandom(SatProblem&, Assignment&);
+Assignment assignAtRandom(SatProblem&, Assignment&);
 
 // Static versions assign using statistics from the whole SAT problem
-void assignInOrderH1Static(SatProblem&, Assignment&);
-void assignMostFrequentVarH2Static(SatProblem&, Assignment&);
-void assignMostFrequentLitH3Static(SatProblem&, Assignment&);
+Assignment assignInOrderH1Static(SatProblem&, Assignment&);
+Assignment assignMostFrequentVarH2Static(SatProblem&, Assignment&);
+Assignment assignMostFrequentLitH3Static(SatProblem&, Assignment&);
 
 // Dynamic versions assign using statistics from all the untrue clauses
-void assignInOrderH1Dynamic(SatProblem&, Assignment&);
-void assignMostFrequentVarH2Dynamic(SatProblem&, Assignment&);
-void assignMostFrequentLitH3Dynamic(SatProblem&, Assignment&);
+Assignment assignInOrderH1Dynamic(SatProblem&, Assignment&);
+Assignment assignMostFrequentVarH2Dynamic(SatProblem&, Assignment&);
+Assignment assignMostFrequentLitH3Dynamic(SatProblem&, Assignment&);
 
 /*
     Algorithms
 */
-void applyWalkSat(SatProblem&, Assignment&, int, float);
+Assignment applyWalkSat(SatProblem&, Assignment&, int, float);

@@ -80,15 +80,18 @@ void SatProblem::updateBest(Assignment& assign, int nbUnverified) {
     AssignmentHeuristics
 */
 
-void assignAtRandom(SatProblem& pb, Assignment& assign) {
+Assignment assignAtRandom(SatProblem& pb, Assignment& prevAssign) {
+    auto assign = prevAssign;
     for (int iVar = 0; iVar < pb.nVars; iVar++) {
         if (assign[iVar] == UNASSIGNED) {
             assign[iVar] = rand()%2;
         }
     }
+    return assign;
 }
 
-void assignStatic(SatProblem& pb, Assignment& assign, string sortOrder) {
+Assignment assignStatic(SatProblem& pb, Assignment& prevAssign, string sortOrder) {
+    auto assign = prevAssign;
     vector<array<int, 2>> nbTimesAs(pb.nVars, {0, 0});
     vector<int> varOrder(pb.nVars);
     iota(begin(varOrder), end(varOrder), 0);
@@ -114,21 +117,23 @@ void assignStatic(SatProblem& pb, Assignment& assign, string sortOrder) {
         }
     }
     pb.updateBest(assign);
+    return assign;
 }
 
-void assignInOrderH1Static(SatProblem& pb, Assignment& assign) {
-    assignStatic(pb, assign, "None");
+Assignment assignInOrderH1Static(SatProblem& pb, Assignment& assign) {
+    return assignStatic(pb, assign, "None");
 }
 
-void assignMostFrequentVarH2Static(SatProblem& pb, Assignment& assign) {
-    assignStatic(pb, assign, "max_var");
+Assignment assignMostFrequentVarH2Static(SatProblem& pb, Assignment& assign) {
+    return assignStatic(pb, assign, "max_var");
 }
 
-void assignMostFrequentLitH3Static(SatProblem& pb, Assignment& assign) {
-    assignStatic(pb, assign, "max_literal");
+Assignment assignMostFrequentLitH3Static(SatProblem& pb, Assignment& assign) {
+    return assignStatic(pb, assign, "max_literal");
 }
 
-void assignDynamic(SatProblem& pb, Assignment& assign, bool scoreIsId, bool scoreByLiteral) {
+Assignment assignDynamic(SatProblem& pb, Assignment& prevAssign, bool scoreIsId, bool scoreByLiteral) {
+    auto assign = prevAssign;
     vector<array<int, 2>> nbOccLit(pb.nVars, {0, 0});
     vector<vector<int>> clausesUsingVar(pb.nVars);
     vector<bool> isClauseVerified(pb.nClauses, false);
@@ -190,25 +195,27 @@ void assignDynamic(SatProblem& pb, Assignment& assign, bool scoreIsId, bool scor
         }
     }
     pb.updateBest(assign);
+    return assign;
 }
 
-void assignInOrderH1Dynamic(SatProblem& pb, Assignment& assign) {
-    assignDynamic(pb, assign, true, false);
+Assignment assignInOrderH1Dynamic(SatProblem& pb, Assignment& assign) {
+    return assignDynamic(pb, assign, true, false);
 }
 
-void assignMostFrequentVarH2Dynamic(SatProblem& pb, Assignment& assign) {
-    assignDynamic(pb, assign, false, false);
+Assignment assignMostFrequentVarH2Dynamic(SatProblem& pb, Assignment& assign) {
+    return assignDynamic(pb, assign, false, false);
 }
 
-void assignMostFrequentLitH3Dynamic(SatProblem& pb, Assignment& assign) {
-    assignDynamic(pb, assign, false, true);
+Assignment assignMostFrequentLitH3Dynamic(SatProblem& pb, Assignment& assign) {
+    return assignDynamic(pb, assign, false, true);
 }
 
 
 /*
     Algorithms
 */
-void applyWalkSat(SatProblem& pb, Assignment& assign, int flipBudget, float randEps) {
+Assignment applyWalkSat(SatProblem& pb, Assignment& prevAssign, int flipBudget, float randEps) {
+    auto assign = prevAssign;
     /* Every variable should be assigned prior to calling this function */
     vector<int> clsNbLitTrue(pb.nClauses, 0);
     int nbUnverified = 0;
@@ -279,4 +286,5 @@ void applyWalkSat(SatProblem& pb, Assignment& assign, int flipBudget, float rand
 
         pb.updateBest(assign, nbUnverified);
     }
+    return assign;
 }

@@ -59,10 +59,10 @@ int main() {
     cout << "First solution has min=" << problem.minUnverified << endl;
     auto assign = problem.freeAssignment();
 
-    assignMostFrequentLitH3Static(problem, assign);
+    assign = assignMostFrequentLitH3Static(problem, assign);
     cout << "After H3, min=" << problem.minUnverified << endl;
     cout << "score of " << problem.score(assign) << endl;
 
-    applyWalkSat(problem, assign, 200, 0.1);
+    assign = applyWalkSat(problem, assign, 200, 0.1);
     cout << "After WalkSat, min=" << problem.minUnverified << endl;
 }
