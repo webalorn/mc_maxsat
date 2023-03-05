@@ -1,5 +1,6 @@
 CXX=clang++ -std=c++20
-CPPFLAGS=-O2 -Wall -Wextra -Wno-sign-compare -Wshadow
+DEBUGFLAGS=-g -ggdb3 # -fsanitize=address
+CPPFLAGS=-Wall -Wextra -Wno-sign-compare -Wshadow ${DEBUGFLAGS} # -O2
 LDFLAGS=
 SRCS=$(shell find src -type f -name '*.cpp')
 OBJS=$(subst .cpp,.o,$(SRCS))
@@ -14,4 +15,4 @@ build/mc_maxsat: $(OBJS)
 	$(CXX) $(LDFLAGS) -o build/mc_maxsat $(OBJS)
 
 clean:
-	rm $(OBJS) build/*
+	rm -r $(OBJS) build/*

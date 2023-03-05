@@ -1,3 +1,3 @@
 # Monte Carlo for MAXSat
 
-Variables are between 1 and N. A clause is a list of integers, with `i` to represent the variable `i`, and `-i` to represent its negation. A solution is a list of integers, with `1` meaning that the value is set to `true`, `-1` if set to `false`, and `0` if not set.
+Variables are between 0 and N-1. A clause is a list of integers and booleans, with `(i,b)` representing the variable `i`, and `b` being false if and only iff the literal is negated. A solution is a list of integers values for each variable, with `-1` meaning that the variable is unassigned, and `0` and `1` being the boolean values.

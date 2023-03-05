@@ -1,5 +1,6 @@
 *.o
+*.gch
 .DS_Store
-.vscode/*
-build/*
-__local__/*
+.vscode
+build
+__local__
