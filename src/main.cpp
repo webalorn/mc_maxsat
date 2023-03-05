@@ -5,6 +5,7 @@
 #include <sstream>
 
 #include "maxsat.hpp"
+#include "mc.hpp"
 
 using namespace std;
 
@@ -56,13 +57,20 @@ int main() {
     SatProblem problem = readSatProblem("data/input1.cnf");
     cout << "We have a problem with " << problem.nVars << " variables and " << problem.nClauses << " clauses" << endl;
 
-    cout << "First solution has min=" << problem.minUnverified << endl;
+    cout << "First solution has score=" << problem.score(problem.randomAssignment()) << endl;
     auto assign = problem.freeAssignment();
 
     assign = assignMostFrequentLitH3Static(problem, assign);
-    cout << "After H3, min=" << problem.minUnverified << endl;
-    cout << "score of " << problem.score(assign) << endl;
+    cout << "After H3, score=" << problem.score(assign) << endl;
 
     assign = applyWalkSat(problem, assign, 200, 0.1);
-    cout << "After WalkSat, min=" << problem.minUnverified << endl;
+    cout << "After WalkSat, score=" << problem.score(assign) << endl;
+
+    // MCTS
+    cout << endl << "Now applying MCTS" << endl;
+    MCSettings settings{};
+    MCTSInstance<> inst{settings, problem};
+    runMCTS(inst, 10);
+
+    cout << "After MC, score=" << inst.minUnverified << endl;
 }

@@ -1,3 +1,6 @@
+#ifndef MAXSAT_HPP
+#define MAXSAT_HPP
+
 #include <vector>
 #include <array>
 
@@ -5,6 +8,7 @@ struct Literal {
     int varId;
     bool isTrue;
 };
+bool operator==(const Literal& a, const Literal& b);
 
 using Value = signed char;
 using Clause = std::vector<Literal>;
@@ -16,16 +20,12 @@ struct SatProblem {
     std::vector<std::vector<int>> clausesUsingVar;
     std::vector<std::array<std::vector<int>, 2>> clausesUsingLit;
 
-    int minUnverified;
-    Assignment bestAssignment;
-
     SatProblem(std::vector<Clause>& initClauses, int initNVars=0);
 
-    Assignment freeAssignment();
-    Assignment randomAssignment();
-    std::vector<int> unverifiedClauses(Assignment&);
-    int score(Assignment&);
-    void updateBest(Assignment& assign, int nbUnverified = -1);
+    Assignment freeAssignment() const;
+    Assignment randomAssignment() const;
+    std::vector<int> unverifiedClauses(const Assignment&) const;
+    int score(const Assignment&) const;
 };
 
 const Value UNASSIGNED = -1;
@@ -33,22 +33,24 @@ const Value VAR_TRUE = 1;
 const Value VAR_FALSE = 0;
 
 /*
-    AssignmentHeuristics
+    Assignment Heuristics
 */
 
-Assignment assignAtRandom(SatProblem&, Assignment&);
+Assignment assignAtRandom(const SatProblem&, const Assignment&);
 
 // Static versions assign using statistics from the whole SAT problem
-Assignment assignInOrderH1Static(SatProblem&, Assignment&);
-Assignment assignMostFrequentVarH2Static(SatProblem&, Assignment&);
-Assignment assignMostFrequentLitH3Static(SatProblem&, Assignment&);
+Assignment assignInOrderH1Static(const SatProblem&, const Assignment&);
+Assignment assignMostFrequentVarH2Static(const SatProblem&, const Assignment&);
+Assignment assignMostFrequentLitH3Static(const SatProblem&, const Assignment&);
 
 // Dynamic versions assign using statistics from all the untrue clauses
-Assignment assignInOrderH1Dynamic(SatProblem&, Assignment&);
-Assignment assignMostFrequentVarH2Dynamic(SatProblem&, Assignment&);
-Assignment assignMostFrequentLitH3Dynamic(SatProblem&, Assignment&);
+Assignment assignInOrderH1Dynamic(const SatProblem&, const Assignment&);
+Assignment assignMostFrequentVarH2Dynamic(const SatProblem&, const Assignment&);
+Assignment assignMostFrequentLitH3Dynamic(const SatProblem&, const Assignment&);
 
 /*
     Algorithms
 */
-Assignment applyWalkSat(SatProblem&, Assignment&, int, float);
+Assignment applyWalkSat(const SatProblem&, const Assignment&, int, float);
+
+#endif
