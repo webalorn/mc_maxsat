@@ -5,6 +5,7 @@
 #include <unordered_map>
 
 #include "maxsat.hpp"
+#include "util.hpp"
 
 const uint HASH_MOD = 1e9+7;
 

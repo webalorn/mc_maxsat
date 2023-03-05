@@ -132,6 +132,7 @@ template<class S>
 Literal MCState::getAction(MCTSInstance<S>& inst) {
     int bestActionId = -1;
     double bestUCTVal = 0;
+    // cerr << "Actions: ";
     for (int iAction = 0; iAction < (int)nextActions.size(); iAction++) {
         double N_c = actionsNExplorations[iAction];
         double N_tot = max(nbSubExplorations, 1);
@@ -140,10 +141,13 @@ Literal MCState::getAction(MCTSInstance<S>& inst) {
             + inst.settings.ucbCExplo * sqrt(log(N_tot) / (N_c + 1.))
         );
         if (bestActionId == -1 || bestUCTVal < uctVal) {
-            uctVal = bestUCTVal;
+            bestUCTVal = uctVal;
             bestActionId = iAction;
         }
+        // cerr << nextActions[iAction] << " (" << uctVal << ") ";
+        // cerr << "[N_c=" << N_c << ", N_tot=" << N_tot << ", q=" << actionsQValues[iAction] << "] ";
     }
+    // cerr << endl << endl;
     return nextActions[bestActionId];
 }
 
@@ -208,11 +212,13 @@ Assignment applyAction(const Assignment& assign, Literal action) {
 int MCTSearchDfs(MCTSInstance<>& inst, Assignment& assign) {
     MCState& state = inst.get(assign);
     state.nbTimesSeen += 1;
+    // cerr << "Assign " << assign << " x" << state.nbTimesSeen << endl;
 
     if (state.terminal || state.nbTimesSeen == 1) {
         return state.rolloutValue(inst);
     }
     Literal action = state.getAction(inst);
+    // cerr << "Take action " << action << endl;
     auto nextAssign = applyAction(assign, action);
     int score = MCTSearchDfs(inst, nextAssign);
     state.updateAfterAction(inst, action, score);
@@ -222,7 +228,9 @@ int MCTSearchDfs(MCTSInstance<>& inst, Assignment& assign) {
 void runMCTS(MCTSInstance<>& inst, int steps) {
     auto freeAssign = inst.pb.freeAssignment();
     for (int iStep = 0; iStep < steps; iStep++) {
-        MCTSearchDfs(inst, freeAssign);
+        // cerr << "\n===== runMCTS step=" << iStep << " =====" << endl;
+        int finalScore = MCTSearchDfs(inst, freeAssign);
+        // cerr << "finalScore = " << finalScore << endl;
     }
 }
 

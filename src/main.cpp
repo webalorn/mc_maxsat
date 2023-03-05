@@ -69,8 +69,19 @@ int main() {
     // MCTS
     cout << endl << "Now applying MCTS" << endl;
     MCSettings settings{};
+    settings.nodeNActionVars = 1;
+    settings.nodeActionVarsHeuristic = 1;
+    settings.ucbCExplo = 0.03;
+
+    settings.nodeActionHeuristicDynamic = false;
+    settings.rolloutHeuristic = 3;
+    settings.dynamicHeuristic = false;
+    settings.walkBudgetPerVar = 2;
+    settings.walkEps = 0.3;
+
     MCTSInstance<> inst{settings, problem};
     runMCTS(inst, 10);
+    cerr << "tree size " << inst.tree.size() << endl;
 
     cout << "After MC, score=" << inst.minUnverified << endl;
 }
