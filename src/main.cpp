@@ -51,8 +51,8 @@ SatProblem readSatProblem(string filepath) {
 }
 
 int main() {
-    srand(0);
-    
+    srand(1);
+
     SatProblem problem = readSatProblem("data/input1.cnf");
     cout << "We have a problem with " << problem.nVars << " variables and " << problem.nClauses << " clauses" << endl;
 
@@ -60,7 +60,6 @@ int main() {
     auto assign = problem.freeAssignment();
 
     assignMostFrequentLitH3Static(problem, assign);
-    // assignMostFrequentLitH3Dynamic(problem, assign);
     cout << "After H3, min=" << problem.minUnverified << endl;
     cout << "score of " << problem.score(assign) << endl;
 

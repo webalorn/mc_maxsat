@@ -5,6 +5,7 @@
 #include <numeric>
 #include <string>
 #include <queue>
+#include <iostream>
 
 #include "maxsat.hpp"
 
@@ -99,14 +100,14 @@ void assignStatic(SatProblem& pb, Assignment& assign, string sortOrder) {
     }
     if (sortOrder == "max_literal") {
         sort(varOrder.begin(), varOrder.end(), [&nbTimesAs](int i1, int i2) -> bool { 
-            return max(nbTimesAs[i1][0], nbTimesAs[i1][1]) <= max(nbTimesAs[i2][0], nbTimesAs[i2][1]); 
+            return max(nbTimesAs[i1][0], nbTimesAs[i1][1]) >= max(nbTimesAs[i2][0], nbTimesAs[i2][1]); 
         });
-    }
-    else if (sortOrder == "max_var") {
+    } else if (sortOrder == "max_var") {
         sort(varOrder.begin(), varOrder.end(), [&nbTimesAs](int i1, int i2) -> bool { 
-            return nbTimesAs[i1][0] + nbTimesAs[i1][1] <= nbTimesAs[i2][0] + nbTimesAs[i2][1]; 
+            return nbTimesAs[i1][0] + nbTimesAs[i1][1] >= nbTimesAs[i2][0] + nbTimesAs[i2][1]; 
         });
     }
+    // reverse(varOrder.begin(), varOrder.end());
     for (int iVar : varOrder) {
         if (assign[iVar] == UNASSIGNED) {
             assign[iVar] = (nbTimesAs[iVar][1] >= nbTimesAs[iVar][0]);
@@ -129,7 +130,7 @@ void assignMostFrequentLitH3Static(SatProblem& pb, Assignment& assign) {
 
 void assignDynamic(SatProblem& pb, Assignment& assign, bool scoreIsId, bool scoreByLiteral) {
     vector<array<int, 2>> nbOccLit(pb.nVars, {0, 0});
-    vector<vector<int>> clausesUsingVar;
+    vector<vector<int>> clausesUsingVar(pb.nVars);
     vector<bool> isClauseVerified(pb.nClauses, false);
 
     // Init
