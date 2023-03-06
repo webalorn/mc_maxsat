@@ -7,6 +7,8 @@
 
 #include "maxsat.hpp"
 
+const int INF = 1e9;
+
 template<class T> std::ostream& operator<<(std::ostream& os, const std::vector<T>& v) {
     os << "[ ";
     for (auto& el : v) {

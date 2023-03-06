@@ -3,11 +3,14 @@
 #include <string>
 #include <fstream>
 #include <sstream>
+#include <vector>
+#include "tclap/CmdLine.h"
 
 #include "maxsat.hpp"
 #include "mc.hpp"
 
 using namespace std;
+using namespace TCLAP;
 
 vector<string> split(const string &s, char delim) {
     vector<string> result{};
@@ -51,7 +54,7 @@ SatProblem readSatProblem(string filepath) {
     return SatProblem(clauses, nVars);
 }
 
-int main() {
+int main_test() {
     srand(1);
 
     SatProblem problem = readSatProblem("data/input1.cnf");
@@ -66,11 +69,14 @@ int main() {
     assign = applyWalkSat(problem, assign, 200, 0.1);
     cout << "After WalkSat, score=" << problem.score(assign) << endl;
 
-    // MCTS
+    /*
+        MCTS
+    */
     cout << endl << "Now applying MCTS" << endl;
+    
     MCSettings settings{};
-    settings.nodeNActionVars = 1;
-    settings.nodeActionVarsHeuristic = 1;
+    settings.nodeNActionVars = 10;
+    settings.nodeActionVarsHeuristic = 3;
     settings.ucbCExplo = 0.03;
 
     settings.nodeActionHeuristicDynamic = false;
@@ -79,9 +85,122 @@ int main() {
     settings.walkBudgetPerVar = 2;
     settings.walkEps = 0.3;
 
-    MCTSInstance<> inst{settings, problem};
-    runMCTS(inst, 10);
-    cerr << "tree size " << inst.tree.size() << endl;
+    MCTSInstance<> inst1{settings, problem};
+    runMCTS(inst1, 200);
 
-    cout << "After MC, score=" << inst.minUnverified << endl;
+    cerr << "tree size " << inst1.tree.size() << endl;
+    cout << "After MCTS, score=" << inst1.minUnverified << endl;
+
+    /*
+        NMCS
+    */
+    cout << endl << "Now applying Nested MCS" << endl;
+
+    MCTSInstance<> inst2{settings, problem};
+    runNMCS(inst2, inst2.pb.freeAssignment(), 1);
+
+    cerr << "tree size " << inst2.tree.size() << endl;
+    cout << "After NMCS, score=" << inst2.minUnverified << endl;
+    
+    return 0;
+}
+
+int main(int argc, char** argv) {
+    // return main_test();
+
+    string method = "rollout";
+    MCSettings settings{};
+
+    vector<string> methodsList{"rollout", "mcts", "nested_mc"};
+    ValuesConstraint<string> methodsConstraint(methodsList);
+    vector<int> heuristicList{0, 1, 2, 3};
+    ValuesConstraint<int> heuristicConstraint(heuristicList);
+
+	try {
+	    CmdLine cmd("Run MC experiment", ' ', "0.0");
+
+        // Create the CMD arguments
+    	ValueArg<string> methodArg("m", "method", "Method used (algorithm)",
+            true, method, &methodsConstraint, cmd);
+        
+    	ValueArg<int> seedArg("s", "seed", "Random generator seed", false, settings.seed, "integer", cmd);
+        
+    	ValueArg<int> nodeNActionVarsArg("", "node_actions",
+            "Number of actionable variable for each node (0 for all variables)",
+            false, settings.nodeNActionVars, "integer", cmd);
+
+    	ValueArg<int> nodeActionVarsHeuristicArg("", "node_h",
+            "Heuristic used to sort the next actions from a node (0=random, 1,2,3=H1,H2,H3)",
+            false, settings.nodeActionVarsHeuristic, &heuristicConstraint, cmd);
+
+        SwitchArg nodeActionHeuristicDynamicSwitch("", "node_h_dyn",
+            "Use the dynamic heuristic for the node action heuristic", cmd, false);
+
+    	ValueArg<int> rolloutHeuristicArg("", "rollout_h",
+            "Heuristic used for the rollout initialization (0=random, 1,2,3=H1,H2,H3)",
+            false, settings.rolloutHeuristic, &heuristicConstraint, cmd);
+
+        SwitchArg dynamicHeuristicSwitch("", "rollout_h_dyn",
+            "Use the dynamic heuristic for the rollout heuristic", cmd, false);
+        
+    	ValueArg<int> walkBudgetPerVarArg("w", "w_var",
+            "Walk2Sat budget per variable",
+            false, settings.walkBudgetPerVar, "integer", cmd);
+        
+    	ValueArg<float> walkEpsArg("", "walk_eps",
+            "Walk2Sat epsilon value",
+            false, settings.walkEps, "float [0;1]", cmd);
+        
+    	ValueArg<float> ucbCExploArg("c", "ucb_explo",
+            "UCB exploration parameter (c)",
+            false, settings.ucbCExplo, "float", cmd);
+        
+    	ValueArg<int> stepsArg("n", "steps",
+            "Number of steps for the MCTS algorithm",
+            false, settings.steps, "integer", cmd);
+        
+    	ValueArg<int> nmcsDepthArg("d", "n_depth",
+            "Depth for the nested MC algorithm",
+            false, settings.nmcsDepth, "integer", cmd);
+        
+
+        // Parse the CMD arguments
+	    cmd.parse(argc, argv);
+
+        method = methodArg.getValue();
+        settings.seed = seedArg.getValue();
+
+        settings.nodeNActionVars = nodeNActionVarsArg.getValue();
+        settings.nodeActionVarsHeuristic = nodeActionVarsHeuristicArg.getValue();
+        settings.nodeActionHeuristicDynamic = nodeActionHeuristicDynamicSwitch.getValue();
+
+        settings.rolloutHeuristic = rolloutHeuristicArg.getValue();
+        settings.dynamicHeuristic = dynamicHeuristicSwitch.getValue();
+        settings.walkBudgetPerVar = walkBudgetPerVarArg.getValue();
+        settings.walkEps = walkEpsArg.getValue();
+
+        settings.ucbCExplo = ucbCExploArg.getValue();
+        settings.steps = stepsArg.getValue();
+        settings.nmcsDepth = nmcsDepthArg.getValue();
+
+	} catch (ArgException &e) {
+        cerr << "error: " << e.error() << " for arg " << e.argId() << endl;
+        return -1;
+    }
+
+    // Initialize the problem
+    srand(settings.seed); // TODO: call for EACH problem
+
+    SatProblem problem = readSatProblem("data/input1.cnf");
+    MCTSInstance<> inst{settings, problem};
+
+    if (method == "rollout") {
+        runRollout(inst, 1);
+    } else if (method == "mcts") {
+        runMCTS(inst, settings.steps);
+    } else if (method == "nested_mc") {
+        runNMCS(inst, inst.pb.freeAssignment(), settings.nmcsDepth);
+    }
+    cout << "Found score of " << inst.minUnverified << endl;
+    
 }

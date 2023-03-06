@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <unordered_map>
+#include <memory>
 
 #include "maxsat.hpp"
 #include "util.hpp"
@@ -17,6 +18,7 @@ template<class S=MCState> struct MCTSInstance;
 */
 
 struct MCSettings {
+    int seed;
     int nodeNActionVars; // 0 for all variables, or > 0 for the number of vars
     int nodeActionVarsHeuristic; // 0 for random, or i in [1, 2, 3] for Hi
     bool nodeActionHeuristicDynamic;
@@ -25,6 +27,7 @@ struct MCSettings {
     int walkBudgetPerVar;
     float walkEps;
     double ucbCExplo;
+    int steps, nmcsDepth;
 
     MCSettings();
 };
@@ -56,7 +59,7 @@ struct AssignmentHash {
     std::size_t operator()(const Assignment& assign) const;
 };
 
-template<class T=MCState> using MCTree = std::unordered_map<Assignment, T, AssignmentHash>;
+template<class T=MCState> using MCTree = std::unordered_map<Assignment, std::unique_ptr<T>, AssignmentHash>;
 
 
 /*
@@ -73,7 +76,7 @@ struct MCTSInstance {
     Assignment bestAssignment;
 
     MCTSInstance(const MCSettings&, const SatProblem&);
-    S& get(Assignment&);
+    S* get(Assignment&);
     void updateBest(Assignment& assign, int nbUnverified = -1);
 };
 
@@ -82,6 +85,8 @@ struct MCTSInstance {
     MC Algorithms
 */
 
+void runRollout(MCTSInstance<>& inst, int steps);
 void runMCTS(MCTSInstance<>& inst, int steps);
+int runNMCS(MCTSInstance<>& inst, Assignment assign, int level);
 
 #endif

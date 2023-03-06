@@ -11,15 +11,25 @@ using namespace std;
 */
 
 MCSettings::MCSettings(){
+    seed = 0;
+
+    // Actions from nodes (MCTS, NMCS)
     nodeNActionVars = 2;
     nodeActionVarsHeuristic = 3;
     nodeActionHeuristicDynamic = false;
+
+    // Rollout heuristic + algorithm (MCTS, NMCS)
     rolloutHeuristic = 3;
     dynamicHeuristic = false;
     walkBudgetPerVar = 2;
     walkEps = 0.1;
-    // ucbCExplo = sqrt(2);
-    ucbCExplo = 0.2; // TODO: which c value?
+
+    // MCTS only
+    ucbCExplo = 0.03; // TODO: which c value?
+    steps = 100; // Steps for MCTS
+
+    // NMCS only
+    nmcsDepth = 1;
 }
 
 Assignment applyHeuristic(SatProblem& pb, Assignment& assign, MCSettings& settings) {
@@ -180,11 +190,11 @@ MCTSInstance<S>::MCTSInstance(const MCSettings& _settings, const SatProblem& _pb
 }
 
 template<class S>
-S& MCTSInstance<S>::get(Assignment& assign) {
+S* MCTSInstance<S>::get(Assignment& assign) {
     if (tree.find(assign) == tree.end()) {
-        tree.insert({assign, S{settings, pb, assign}});
+        tree.insert({assign, unique_ptr<S>(new S{settings, pb, assign})});
     }
-    return tree.at(assign);
+    return tree.at(assign).get();
 }
 
 template<class S>
@@ -209,19 +219,27 @@ Assignment applyAction(const Assignment& assign, Literal action) {
     return nextAssign;
 }
 
-int MCTSearchDfs(MCTSInstance<>& inst, Assignment& assign) {
-    MCState& state = inst.get(assign);
-    state.nbTimesSeen += 1;
-    // cerr << "Assign " << assign << " x" << state.nbTimesSeen << endl;
-
-    if (state.terminal || state.nbTimesSeen == 1) {
-        return state.rolloutValue(inst);
+void runRollout(MCTSInstance<>& inst, int steps) {
+    auto assign = inst.pb.freeAssignment();
+    for (int iStep = 0; iStep < steps; iStep++) {
+        MCState* state = inst.get(assign);
+        state->rolloutValue(inst);
     }
-    Literal action = state.getAction(inst);
+}
+
+int MCTSearchDfs(MCTSInstance<>& inst, Assignment& assign) {
+    MCState* state = inst.get(assign);
+    state->nbTimesSeen += 1;
+    // cerr << "Assign " << assign << " x" << state->nbTimesSeen << endl;
+
+    if (state->terminal || state->nbTimesSeen == 1) {
+        return state->rolloutValue(inst);
+    }
+    Literal action = state->getAction(inst);
     // cerr << "Take action " << action << endl;
     auto nextAssign = applyAction(assign, action);
     int score = MCTSearchDfs(inst, nextAssign);
-    state.updateAfterAction(inst, action, score);
+    state->updateAfterAction(inst, action, score);
     return score;
 }
 
@@ -232,6 +250,30 @@ void runMCTS(MCTSInstance<>& inst, int steps) {
         int finalScore = MCTSearchDfs(inst, freeAssign);
         // cerr << "finalScore = " << finalScore << endl;
     }
+}
+
+int runNMCS(MCTSInstance<>& inst, Assignment assign, int level) {
+    MCState* state = inst.get(assign);
+    if (state->terminal || level <= 0) {
+        return state->rolloutValue(inst);
+    }
+    int bestSeqScore = INF;
+    while (!state->terminal) {
+        int bestActionScore = INF;
+        Assignment bestNextAssign;
+        for (Literal action : state->nextActions) {
+            Assignment nextAssign = applyAction(assign, action);
+            int actionScore = runNMCS(inst, nextAssign, level-1);
+            if (actionScore < bestActionScore) {
+                bestActionScore = actionScore;
+                bestNextAssign = nextAssign;
+            }
+        }
+        assign = bestNextAssign;
+        bestSeqScore = min(bestSeqScore, bestActionScore);
+        state = inst.get(assign);
+    }
+    return bestSeqScore;
 }
 
 /*
