@@ -208,20 +208,26 @@ MCTSInstance<S>::MCTSInstance(const MCSettings& _settings, const SatProblem& _pb
     bestAssignment = pb.randomAssignment();
     minUnverified = pb.score(bestAssignment);
     amafCount = vector<int>(pb.nVars*2, 0);
-    amafSum = vector<double>(pb.nVars*2, 0);
+    amafMin = vector<double>(pb.nVars*2, INF);
 }
 
 template<class S>
-void MCTSInstance<S>::amafAddResult(const Literal& lit, double score) {
-    int litId = lit.isTrue * pb.nVars + lit.varId;
-    amafCount[litId]++;
-    amafSum[litId] += score;
+void MCTSInstance<S>::amafAddResult(const Literal& lit, double score, int count) {
+    int litId = lit.id(pb);
+    amafCount[litId] += count;
+    amafMin[litId] = min(score, amafMin[litId]);
 }
 
 template<class S>
-double MCTSInstance<S>::amafGet(const Literal& lit, int nCurrent) {
-    int litId = lit.isTrue * pb.nVars + lit.varId;
-    return amafSum[litId] / max(1., amafCount[litId] + nCurrent + settings.amafBias * amafCount[litId] * nCurrent);
+double MCTSInstance<S>::amafGet(const Literal& lit, double realValue, int count) {
+    int litId = lit.id(pb);
+    if (!amafCount[litId]) {
+        return realValue;
+    }
+    double amafCoeff = 1 / (1. + (double)count / amafCount[litId] + (double)settings.amafBias * count);
+    // cerr << "count=" << count << " amafCount[litId]=" << amafCount[litId] << " amafCoeff = " << amafCoeff << endl;
+    amafCoeff = min(1., settings.amaf * amafCoeff);
+    return realValue * (1 - amafCoeff) + amafMin[litId] * amafCoeff;
 }
 
 template<class S>
@@ -377,14 +383,16 @@ int seqHalving(MCTSInstance<>& inst, Assignment assign, int budget) {
             loopBudget -= callBudget;
 
             int iAction = movesScores[iMove].second;
+            state->actionsNExplorations[iAction] += callBudget;
             const Literal& action = state->nextActions[iAction];
             auto callAssign = applyAction(assign, action);
             int callScore = seqHalving(inst, callAssign, callBudget);
             
             // Update best scores
             int actionBestScore = min(callScore, state->bestScoresForActions[iAction]);
-            inst.amafAddResult(action, callScore);
-            double amafScore = actionBestScore + inst.settings.amaf * inst.amafGet(action, 0);
+            // double amafScore = actionBestScore + inst.settings.amaf * inst.amafGet(action, inst.get(assign)->nbTimesSeen);
+            double amafScore = inst.amafGet(action, actionBestScore, state->actionsNExplorations[iAction]);
+            inst.amafAddResult(action, callScore, callBudget);
             movesScores[iMove].first = amafScore;
             state->bestScoresForActions[iAction] = actionBestScore;
             bestScore = min(bestScore, callScore);

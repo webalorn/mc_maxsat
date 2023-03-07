@@ -124,7 +124,7 @@ int main(int argc, char** argv) {
             "AMAF coefficient (currently only for SH)",
             false, settings.amaf, "float", cmd);
         
-    	ValueArg<float> amafBiasArg("", "amaf_buas",
+    	ValueArg<float> amafBiasArg("", "amaf_bias",
             "AMAF bias coefficient (currently only for SH)",
             false, settings.amaf, "float", cmd);
         

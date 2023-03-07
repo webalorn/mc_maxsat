@@ -4,9 +4,12 @@
 #include <vector>
 #include <array>
 
+struct SatProblem;
+
 struct Literal {
     int varId;
     bool isTrue;
+    int id(const SatProblem&) const;
 };
 bool operator==(const Literal&, const Literal&);
 bool operator<(const Literal&, const Literal&);

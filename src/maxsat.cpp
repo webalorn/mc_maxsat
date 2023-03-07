@@ -13,6 +13,9 @@
 
 using namespace std;
 
+int Literal::id(const SatProblem& pb) const {
+    return isTrue * pb.nVars + varId;
+}
 bool operator==(const Literal& a, const Literal& b) {
     return a.varId == b.varId && a.isTrue == b.isTrue;
 }

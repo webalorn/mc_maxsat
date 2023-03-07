@@ -85,14 +85,14 @@ struct MCTSInstance {
     Assignment bestAssignment;
 
     std::vector<int> amafCount;
-    std::vector<double> amafSum;
+    std::vector<double> amafMin;
 
     MCTSInstance(const MCSettings&, const SatProblem&);
     S* get(Assignment&);
     void updateBest(Assignment& assign, int nbUnverified = -1);
 
-    void amafAddResult(const Literal&, double);
-    double amafGet(const Literal&, int);
+    void amafAddResult(const Literal& action, double score, int count);
+    double amafGet(const Literal& action, double realValue, int count);
 };
 
 
