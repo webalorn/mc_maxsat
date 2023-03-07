@@ -120,6 +120,14 @@ int main(int argc, char** argv) {
             "WalkSat epsilon value",
             false, settings.walkEps, "float [0;1]", cmd);
         
+    	ValueArg<float> amafArg("", "amaf",
+            "AMAF coefficient (currently only for SH)",
+            false, settings.amaf, "float", cmd);
+        
+    	ValueArg<float> amafBiasArg("", "amaf_buas",
+            "AMAF bias coefficient (currently only for SH)",
+            false, settings.amaf, "float", cmd);
+        
     	ValueArg<float> ucbCExploArg("c", "ucb_explo",
             "UCB exploration parameter (c)",
             false, settings.ucbCExplo, "float", cmd);
@@ -153,6 +161,8 @@ int main(int argc, char** argv) {
         settings.flipAlgorithm = flipAlgorithmArg.getValue();
         settings.walkBudgetPerVar = walkBudgetPerVarArg.getValue();
         settings.walkEps = walkEpsArg.getValue();
+        settings.amaf = amafArg.getValue();
+        settings.amafBias = amafBiasArg.getValue();
 
         settings.ucbCExplo = ucbCExploArg.getValue();
         settings.behavior = behaviorArg.getValue();

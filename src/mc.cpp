@@ -27,6 +27,8 @@ MCSettings::MCSettings(){
 
     steps = 100; // Steps for MCTS and budget of Sequential Halving ; number of repeats for NMCS or rollout
     behavior = "once"; // once for running only form root ; full for looping, discounted for looping faster
+    amaf = 0; // AMAF coefficient (0 to disable ; currently, only for SH)
+    amafBias = 0; // AMAF bias, allows to decrease the AMAF value quadraticly
 
     // MCTS only
     ucbCExplo = 0.05;
@@ -205,6 +207,21 @@ MCTSInstance<S>::MCTSInstance(const MCSettings& _settings, const SatProblem& _pb
     :settings(_settings), pb(_pb), tree() {
     bestAssignment = pb.randomAssignment();
     minUnverified = pb.score(bestAssignment);
+    amafCount = vector<int>(pb.nVars*2, 0);
+    amafSum = vector<double>(pb.nVars*2, 0);
+}
+
+template<class S>
+void MCTSInstance<S>::amafAddResult(const Literal& lit, double score) {
+    int litId = lit.isTrue * pb.nVars + lit.varId;
+    amafCount[litId]++;
+    amafSum[litId] += score;
+}
+
+template<class S>
+double MCTSInstance<S>::amafGet(const Literal& lit, int nCurrent) {
+    int litId = lit.isTrue * pb.nVars + lit.varId;
+    return amafSum[litId] / max(1., amafCount[litId] + nCurrent + settings.amafBias * amafCount[litId] * nCurrent);
 }
 
 template<class S>
@@ -347,7 +364,7 @@ int seqHalving(MCTSInstance<>& inst, Assignment assign, int budget) {
     state->nbTimesSeen += budget;
     
     // Else, split the budget between runs
-    vector<pair<int, int>> movesScores;
+    vector<pair<double, int>> movesScores;
     for (int iAction = 0; iAction < (int)state->nextActions.size(); iAction++) {
         movesScores.push_back({state->bestScoresForActions[iAction], iAction});
     }
@@ -360,12 +377,16 @@ int seqHalving(MCTSInstance<>& inst, Assignment assign, int budget) {
             loopBudget -= callBudget;
 
             int iAction = movesScores[iMove].second;
-            auto callAssign = applyAction(assign, state->nextActions[iAction]);
+            const Literal& action = state->nextActions[iAction];
+            auto callAssign = applyAction(assign, action);
             int callScore = seqHalving(inst, callAssign, callBudget);
             
             // Update best scores
-            movesScores[iMove].first = min(movesScores[iMove].first, callScore);
-            state->bestScoresForActions[iAction] = movesScores[iMove].first;
+            int actionBestScore = min(callScore, state->bestScoresForActions[iAction]);
+            inst.amafAddResult(action, callScore);
+            double amafScore = actionBestScore + inst.settings.amaf * inst.amafGet(action, 0);
+            movesScores[iMove].first = amafScore;
+            state->bestScoresForActions[iAction] = actionBestScore;
             bestScore = min(bestScore, callScore);
         }
         sort(begin(movesScores), end(movesScores));

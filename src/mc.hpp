@@ -26,9 +26,12 @@ struct MCSettings {
     int rolloutHeuristic; // 0 for random, or i in [1, 2, 3] for Hi
     bool dynamicHeuristic;
     int walkBudgetPerVar;
-    float walkEps;
+    double walkEps;
     double ucbCExplo;
-    int steps, nmcsDepth;
+    double amaf;
+    double amafBias;
+    int steps;
+    int nmcsDepth;
     std::string behavior;
     std::string flipAlgorithm; // walksat, novelty
 
@@ -81,9 +84,15 @@ struct MCTSInstance {
     int minUnverified;
     Assignment bestAssignment;
 
+    std::vector<int> amafCount;
+    std::vector<double> amafSum;
+
     MCTSInstance(const MCSettings&, const SatProblem&);
     S* get(Assignment&);
     void updateBest(Assignment& assign, int nbUnverified = -1);
+
+    void amafAddResult(const Literal&, double);
+    double amafGet(const Literal&, int);
 };
 
 
