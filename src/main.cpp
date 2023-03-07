@@ -4,6 +4,9 @@
 #include <fstream>
 #include <sstream>
 #include <vector>
+#include <filesystem>
+#include <chrono>
+
 #include "tclap/CmdLine.h"
 
 #include "maxsat.hpp"
@@ -11,6 +14,7 @@
 
 using namespace std;
 using namespace TCLAP;
+namespace fs = std::filesystem;
 
 vector<string> split(const string &s, char delim) {
     vector<string> result{};
@@ -54,65 +58,23 @@ SatProblem readSatProblem(string filepath) {
     return SatProblem(clauses, nVars);
 }
 
-int main_test() {
-    srand(1);
-
-    SatProblem problem = readSatProblem("data/input1.cnf");
-    cout << "We have a problem with " << problem.nVars << " variables and " << problem.nClauses << " clauses" << endl;
-
-    cout << "First solution has score=" << problem.score(problem.randomAssignment()) << endl;
-    auto assign = problem.freeAssignment();
-
-    assign = assignMostFrequentLitH3Static(problem, assign);
-    cout << "After H3, score=" << problem.score(assign) << endl;
-
-    assign = applyWalkSat(problem, assign, 200, 0.1);
-    cout << "After WalkSat, score=" << problem.score(assign) << endl;
-
-    /*
-        MCTS
-    */
-    cout << endl << "Now applying MCTS" << endl;
-    
-    MCSettings settings{};
-    settings.nodeNActionVars = 10;
-    settings.nodeActionVarsHeuristic = 3;
-    settings.ucbCExplo = 0.03;
-
-    settings.nodeActionHeuristicDynamic = false;
-    settings.rolloutHeuristic = 3;
-    settings.dynamicHeuristic = false;
-    settings.walkBudgetPerVar = 2;
-    settings.walkEps = 0.3;
-
-    MCTSInstance<> inst1{settings, problem};
-    runMCTS(inst1, 200);
-
-    cerr << "tree size " << inst1.tree.size() << endl;
-    cout << "After MCTS, score=" << inst1.minUnverified << endl;
-
-    /*
-        NMCS
-    */
-    cout << endl << "Now applying Nested MCS" << endl;
-
-    MCTSInstance<> inst2{settings, problem};
-    runNMCS(inst2, inst2.pb.freeAssignment(), 1);
-
-    cerr << "tree size " << inst2.tree.size() << endl;
-    cout << "After NMCS, score=" << inst2.minUnverified << endl;
-    
-    return 0;
-}
-
 int main(int argc, char** argv) {
-    // return main_test();
+    cout << C_CYAN;
+    for (const string& part : vector<string>(argv, argv+argc)) {
+        cout << part << " ";
+    }
+    cout << C_RESET << endl;
 
     string method = "rollout";
+    string dataPath = "data/test";
     MCSettings settings{};
 
     vector<string> methodsList{"rollout", "mcts", "nested_mc"};
     ValuesConstraint<string> methodsConstraint(methodsList);
+    vector<string> mctsBehaviors{"once", "full", "discounted"};
+    ValuesConstraint<string> mctsBehaviorsConstraint(mctsBehaviors);
+    vector<string> flipAlgorithms{"walksat", "novelty"};
+    ValuesConstraint<string> flipAlgorithmsConstraint(flipAlgorithms);
     vector<int> heuristicList{0, 1, 2, 3};
     ValuesConstraint<int> heuristicConstraint(heuristicList);
 
@@ -120,6 +82,9 @@ int main(int argc, char** argv) {
 	    CmdLine cmd("Run MC experiment", ' ', "0.0");
 
         // Create the CMD arguments
+    	ValueArg<string> dataPathArg("", "data", "Path to the data directory used",
+            false, dataPath, "path", cmd);
+
     	ValueArg<string> methodArg("m", "method", "Method used (algorithm)",
             true, method, &methodsConstraint, cmd);
         
@@ -143,23 +108,31 @@ int main(int argc, char** argv) {
         SwitchArg dynamicHeuristicSwitch("", "rollout_h_dyn",
             "Use the dynamic heuristic for the rollout heuristic", cmd, false);
         
+    	ValueArg<string> flipAlgorithmArg("", "flip",
+            "Flip algorithm used to optimize the solutions",
+            false, settings.flipAlgorithm, &flipAlgorithmsConstraint, cmd);
+        
     	ValueArg<int> walkBudgetPerVarArg("w", "w_var",
-            "Walk2Sat budget per variable",
+            "WalkSat budget per variable",
             false, settings.walkBudgetPerVar, "integer", cmd);
         
     	ValueArg<float> walkEpsArg("", "walk_eps",
-            "Walk2Sat epsilon value",
+            "WalkSat epsilon value",
             false, settings.walkEps, "float [0;1]", cmd);
         
     	ValueArg<float> ucbCExploArg("c", "ucb_explo",
             "UCB exploration parameter (c)",
             false, settings.ucbCExplo, "float", cmd);
         
+    	ValueArg<string> mctsBehaviorArg("", "mcts_behavior",
+            "MCTS behavior (once only run from the root, discounted is faster than full)",
+            false, settings.mctsBehavior, &mctsBehaviorsConstraint, cmd);
+        
     	ValueArg<int> stepsArg("n", "steps",
             "Number of steps for the MCTS algorithm",
             false, settings.steps, "integer", cmd);
         
-    	ValueArg<int> nmcsDepthArg("d", "n_depth",
+    	ValueArg<int> nmcsDepthArg("d", "depth",
             "Depth for the nested MC algorithm",
             false, settings.nmcsDepth, "integer", cmd);
         
@@ -167,6 +140,7 @@ int main(int argc, char** argv) {
         // Parse the CMD arguments
 	    cmd.parse(argc, argv);
 
+        dataPath = dataPathArg.getValue();
         method = methodArg.getValue();
         settings.seed = seedArg.getValue();
 
@@ -176,10 +150,12 @@ int main(int argc, char** argv) {
 
         settings.rolloutHeuristic = rolloutHeuristicArg.getValue();
         settings.dynamicHeuristic = dynamicHeuristicSwitch.getValue();
+        settings.flipAlgorithm = flipAlgorithmArg.getValue();
         settings.walkBudgetPerVar = walkBudgetPerVarArg.getValue();
         settings.walkEps = walkEpsArg.getValue();
 
         settings.ucbCExplo = ucbCExploArg.getValue();
+        settings.mctsBehavior = mctsBehaviorArg.getValue();
         settings.steps = stepsArg.getValue();
         settings.nmcsDepth = nmcsDepthArg.getValue();
 
@@ -188,19 +164,49 @@ int main(int argc, char** argv) {
         return -1;
     }
 
-    // Initialize the problem
-    srand(settings.seed); // TODO: call for EACH problem
-
-    SatProblem problem = readSatProblem("data/input1.cnf");
-    MCTSInstance<> inst{settings, problem};
-
-    if (method == "rollout") {
-        runRollout(inst, 1);
-    } else if (method == "mcts") {
-        runMCTS(inst, settings.steps);
-    } else if (method == "nested_mc") {
-        runNMCS(inst, inst.pb.freeAssignment(), settings.nmcsDepth);
+    vector<string> dataFiles;
+    for (const auto& dataFile : fs::directory_iterator(dataPath)) {
+        string dataFilePath = dataFile.path();
+        if (split(dataFilePath, '.').back() == "cnf") {
+            dataFiles.push_back(dataFilePath);
+        }
     }
-    cout << "Found score of " << inst.minUnverified << endl;
+
+    cout << "Using data from " << dataPath << " (" << dataFiles.size() << " test files)" << endl;
+    double totalScore = 0;
+    double totalTime = 0;
+
+    for (int iFile = 0; iFile < (int)dataFiles.size(); iFile++) {
+        cout << "Running " << method << " on file " << (iFile+1) << "/" << dataFiles.size()
+            << " [" << dataFiles[iFile] << "]" << endl;
+
+        // Initialize the problem
+        srand(settings.seed);
+        SatProblem problem = readSatProblem(dataFiles[iFile]);
+        MCTSInstance<> inst{settings, problem};
+
+        auto startClock = chrono::high_resolution_clock::now();
+        if (method == "rollout") {
+            runRollout(inst, 1);
+        } else if (method == "mcts") {
+            runMCTS(inst, settings.steps);
+        } else if (method == "nested_mc") {
+            runNMCS(inst, inst.pb.freeAssignment(), settings.nmcsDepth);
+        }
+        auto stopClock = chrono::high_resolution_clock::now();
+        auto runDuration = duration_cast<chrono::milliseconds>(stopClock - startClock);
+        double runTime = runDuration.count() / 1000.0;
+
+        totalScore += inst.minUnverified;
+        totalTime += runTime;
+        cout << "score=" << inst.minUnverified
+            << "  (avg=" << C_GREEN << setprecision(6) << (totalScore / (iFile+1)) << C_RESET
+            << ", avg_time=" << C_CYAN << setprecision(3) << (totalTime / (iFile+1)) << "s" << C_RESET
+            << ")" << endl;
+    }
+    cout << "Final average score is " << C_GREEN << setprecision(6) << (totalScore / dataFiles.size()) << C_RESET
+        << "    (avg_time=" << C_CYAN << setprecision(3) << (totalTime / dataFiles.size()) << "s" << C_RESET
+        << ", total_time=" << C_CYAN << ((int)totalTime) << "s" << C_RESET
+        << ")" << endl;
     
 }

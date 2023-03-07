@@ -1,6 +1,6 @@
 CXX=clang++ -std=c++20
 DEBUGFLAGS=-g -ggdb3 # -fsanitize=address
-CPPFLAGS=-Wall -Wextra -Wno-sign-compare -Wshadow ${DEBUGFLAGS} # -O2
+CPPFLAGS=-Wall -Wextra -Wno-sign-compare -Wshadow ${DEBUGFLAGS} -O2
 LDFLAGS=
 SRCS=$(shell find src -type f -name '*.cpp')
 OBJS=$(subst .cpp,.o,$(SRCS))

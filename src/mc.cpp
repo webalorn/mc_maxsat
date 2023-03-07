@@ -21,12 +21,14 @@ MCSettings::MCSettings(){
     // Rollout heuristic + algorithm (MCTS, NMCS)
     rolloutHeuristic = 3;
     dynamicHeuristic = false;
+    flipAlgorithm = "walksat";
     walkBudgetPerVar = 2;
-    walkEps = 0.1;
+    walkEps = 0.2;
 
     // MCTS only
-    ucbCExplo = 0.03; // TODO: which c value?
+    ucbCExplo = 0.05;
     steps = 100; // Steps for MCTS
+    mctsBehavior = "once"; // once for running only form root ; full for looping, discounted for looping faster
 
     // NMCS only
     nmcsDepth = 1;
@@ -129,9 +131,7 @@ MCState::MCState(MCSettings& settings, SatProblem& pb, Assignment& assign) {
 template<class S>
 int MCState::rolloutValue(MCTSInstance<S>& inst) {
     auto nextAssign = applyHeuristic(inst.pb, stateAssign, inst.settings);
-    int walkSatBudget = nbUnassigned * inst.settings.walkBudgetPerVar;
-
-    nextAssign = applyWalkSat(inst.pb, nextAssign, walkSatBudget, inst.settings.walkEps);
+    nextAssign = applyFlipAlgorithm(inst, nextAssign, nbUnassigned);
     int score = inst.pb.score(nextAssign);
     inst.updateBest(nextAssign, score);
 
@@ -139,16 +139,17 @@ int MCState::rolloutValue(MCTSInstance<S>& inst) {
 }
 
 template<class S>
-Literal MCState::getAction(MCTSInstance<S>& inst) {
+Literal MCState::getAction(MCTSInstance<S>& inst, bool allowExploration) {
     int bestActionId = -1;
     double bestUCTVal = 0;
+    double ucbCExplo = allowExploration ? inst.settings.ucbCExplo : 0;
     // cerr << "Actions: ";
     for (int iAction = 0; iAction < (int)nextActions.size(); iAction++) {
         double N_c = actionsNExplorations[iAction];
         double N_tot = max(nbSubExplorations, 1);
         double uctVal = (
             actionsQValues[iAction]
-            + inst.settings.ucbCExplo * sqrt(log(N_tot) / (N_c + 1.))
+            + ucbCExplo * sqrt(log(N_tot) / (N_c + 1.))
         );
         if (bestActionId == -1 || bestUCTVal < uctVal) {
             bestUCTVal = uctVal;
@@ -219,6 +220,22 @@ Assignment applyAction(const Assignment& assign, Literal action) {
     return nextAssign;
 }
 
+template<class S>
+Assignment applyFlipAlgorithm(MCTSInstance<S>& inst, const Assignment& assign, int nbUnassigned) {
+    Assignment nextAssign;
+    int flipBudget = inst.pb.nVars * inst.settings.walkBudgetPerVar; // TODO: unassigned or total?
+
+    if (inst.settings.flipAlgorithm == "novelty") {
+        nextAssign = applyWalkSat(inst.pb, assign, flipBudget, inst.settings.walkEps, true);
+    } else if (inst.settings.flipAlgorithm == "walksat") {
+        nextAssign = applyWalkSat(inst.pb, assign, flipBudget, inst.settings.walkEps, false);
+    } else {
+        assert((false));
+    }
+    return nextAssign;
+}
+
+
 void runRollout(MCTSInstance<>& inst, int steps) {
     auto assign = inst.pb.freeAssignment();
     for (int iStep = 0; iStep < steps; iStep++) {
@@ -244,11 +261,24 @@ int MCTSearchDfs(MCTSInstance<>& inst, Assignment& assign) {
 }
 
 void runMCTS(MCTSInstance<>& inst, int steps) {
-    auto freeAssign = inst.pb.freeAssignment();
-    for (int iStep = 0; iStep < steps; iStep++) {
-        // cerr << "\n===== runMCTS step=" << iStep << " =====" << endl;
-        int finalScore = MCTSearchDfs(inst, freeAssign);
-        // cerr << "finalScore = " << finalScore << endl;
+    auto assign = inst.pb.freeAssignment();
+    bool discounted = (inst.settings.mctsBehavior == "discounted");
+    bool once = (inst.settings.mctsBehavior == "once");
+
+    MCState* state = inst.get(assign);
+    while (!state->terminal) {
+        // Compute number of steps to do if a discount is applied
+        int nbPrevSteps = discounted ? state->nbTimesSeen : 0;
+        for (int iStep = nbPrevSteps; iStep < steps; iStep++) {
+            MCTSearchDfs(inst, assign);
+        }
+        if (once) {
+            break;
+        }
+        // Take action
+        Literal action = state->getAction(inst, false); // No exploration
+        assign = applyAction(assign, action);
+        state = inst.get(assign);
     }
 }
 

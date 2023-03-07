@@ -51,6 +51,6 @@ Assignment assignMostFrequentLitH3Dynamic(const SatProblem&, const Assignment&);
 /*
     Algorithms
 */
-Assignment applyWalkSat(const SatProblem&, const Assignment&, int, float);
+Assignment applyWalkSat(const SatProblem&, const Assignment&, int, float, bool);
 
 #endif

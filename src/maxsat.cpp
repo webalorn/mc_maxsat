@@ -6,8 +6,10 @@
 #include <string>
 #include <queue>
 #include <iostream>
+#include <tuple>
 
 #include "maxsat.hpp"
+#include "util.hpp"
 
 using namespace std;
 
@@ -94,11 +96,11 @@ Assignment assignStatic(const SatProblem& pb, const Assignment& prevAssign, stri
     }
     if (sortOrder == "max_literal") {
         sort(varOrder.begin(), varOrder.end(), [&nbTimesAs](int i1, int i2) -> bool { 
-            return max(nbTimesAs[i1][0], nbTimesAs[i1][1]) >= max(nbTimesAs[i2][0], nbTimesAs[i2][1]); 
+            return max(nbTimesAs[i1][0], nbTimesAs[i1][1]) > max(nbTimesAs[i2][0], nbTimesAs[i2][1]); 
         });
     } else if (sortOrder == "max_var") {
         sort(varOrder.begin(), varOrder.end(), [&nbTimesAs](int i1, int i2) -> bool { 
-            return nbTimesAs[i1][0] + nbTimesAs[i1][1] >= nbTimesAs[i2][0] + nbTimesAs[i2][1]; 
+            return nbTimesAs[i1][0] + nbTimesAs[i1][1] > nbTimesAs[i2][0] + nbTimesAs[i2][1]; 
         });
     }
     // reverse(varOrder.begin(), varOrder.end());
@@ -203,12 +205,13 @@ Assignment assignMostFrequentLitH3Dynamic(const SatProblem& pb, const Assignment
 /*
     Algorithms
 */
-Assignment applyWalkSat(const SatProblem& pb, const Assignment& prevAssign, int flipBudget, float randEps) {
-    auto assign = prevAssign;
-    auto bestAssign = assign;
+Assignment applyWalkSat(const SatProblem& pb, const Assignment& prevAssign, int flipBudget, float randEps, bool applyNovelty) {
     /* Every variable should be assigned prior to calling this function */
+    auto assign = prevAssign;
     vector<int> clsNbLitTrue(pb.nClauses, 0);
-    int nbUnverified = 0;
+    int nbUnverified = 0; // Number of unverified clauses
+    
+    // Compute the number of literals satifying each clause
     for (int iCls = 0; iCls < pb.nClauses; iCls++) {
         for (const Literal& lit : pb.clauses[iCls]) {
             if (assign[lit.varId] == lit.isTrue) {
@@ -220,31 +223,50 @@ Assignment applyWalkSat(const SatProblem& pb, const Assignment& prevAssign, int 
         }
     }
     int bestNbUnverified = nbUnverified;
+    auto bestAssign = assign;
+    int lastFlippedVar = -1;
 
+    // Loop over the flip budget
     for (int iFlip = 0; iFlip < flipBudget; iFlip++) {
-        vector<int> unverified;
-        for (int iCls = 0; iCls < pb.nClauses; iCls++) {
-            if (clsNbLitTrue[iCls] == 0) {
-                unverified.push_back(iCls);
-            }
-        }
-        if (unverified.empty()) {
-            break;
-        }
-        const Clause& clsSwap = pb.clauses[unverified[rand() % unverified.size()]];
-        vector<pair<int, int>> breakScoreVars; // (BreakScore, varId)
-        for (const Literal& lit : clsSwap) {
-            int nbBreaking = 0;
-            for (int linkedClsId : pb.clausesUsingLit[lit.varId][assign[lit.varId]]) {
-                if (clsNbLitTrue[linkedClsId] == 1) {
-                    nbBreaking += 1;
+        vector<int> consideredVars;
+        if (applyNovelty) {
+            consideredVars = vector<int>(pb.nVars);
+            iota(begin(consideredVars), end(consideredVars), 0);
+        } else {
+            vector<int> unverified;
+            for (int iCls = 0; iCls < pb.nClauses; iCls++) {
+                if (clsNbLitTrue[iCls] == 0) {
+                    unverified.push_back(iCls);
                 }
             }
-            breakScoreVars.push_back({nbBreaking, lit.varId});
+            if (unverified.empty()) { // All clauses are verified \o/
+                break;
+            }
+            const Clause& clsSwap = pb.clauses[unverified[rand() % unverified.size()]];
+            for (const Literal& lit : clsSwap) {
+                consideredVars.push_back(lit.varId);
+            }
+        }
+        
+        vector<tuple<int, int, int>> breakScoreVars; // (BreakScore, rand(), varId)
+        for (int iVar : consideredVars) {
+            int nbBreaking = 0;
+            for (int linkedClsId : pb.clausesUsingLit[iVar][assign[iVar]]) {
+                if (clsNbLitTrue[linkedClsId] == 1) {
+                    nbBreaking += 1;
+                } else if (clsNbLitTrue[linkedClsId] == 0) {
+                    nbBreaking -= 1; // If the variable is set to true, it will make the clause true
+                }
+            }
+            breakScoreVars.push_back({nbBreaking, rand(), iVar});
         }
         sort(begin(breakScoreVars), end(breakScoreVars));
+        if (breakScoreVars.size() >= 2 && get<2>(breakScoreVars[0]) == lastFlippedVar) {
+            // Don't flip twice the same variable in a row (to reduce the risk of beeing stuck in a loop)
+            swap(breakScoreVars[0], breakScoreVars[1]);
+        }
         
-        // Remove scores that don't contribute to the minimum break score (nbBreaking only)
+        // Remove scores that don't contribute to the minimum break score
         // while (breakScoreVars.size() > 1 &&
         //     breakScoreVars[breakScoreVars.size()-1].first > breakScoreVars[breakScoreVars.size()-2].first) {
         //     breakScoreVars.pop_back();
@@ -252,15 +274,16 @@ Assignment applyWalkSat(const SatProblem& pb, const Assignment& prevAssign, int 
         // Choose the variable to flip
         int flipVar = -1;
         float randValue = rand() / (float)RAND_MAX;
-        if (breakScoreVars[0].first == 0) { // If the first variable doesn't break anything
-            flipVar = breakScoreVars[0].second;
+        if (get<0>(breakScoreVars[0]) < 0) { // If the first variable improves the configuration
+            flipVar = get<2>(breakScoreVars[0]);
         } else if (randValue < randEps) { // Sometimes, choose a random var
-            flipVar = breakScoreVars[rand()%breakScoreVars.size()].second;
+            flipVar = get<2>(breakScoreVars[rand()%breakScoreVars.size()]);
         } else { // Take the minimum breaking var
-            flipVar = breakScoreVars[0].second;
+            flipVar = get<2>(breakScoreVars[0]);
         }
 
         // FLIP the variable
+        lastFlippedVar = flipVar;
         for (int linkedClsId : pb.clausesUsingLit[flipVar][assign[flipVar]]) {
             clsNbLitTrue[linkedClsId] -= 1;
             if (clsNbLitTrue[linkedClsId] == 0) {

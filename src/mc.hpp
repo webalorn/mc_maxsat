@@ -4,6 +4,7 @@
 #include <vector>
 #include <unordered_map>
 #include <memory>
+#include <string>
 
 #include "maxsat.hpp"
 #include "util.hpp"
@@ -28,6 +29,8 @@ struct MCSettings {
     float walkEps;
     double ucbCExplo;
     int steps, nmcsDepth;
+    std::string mctsBehavior;
+    std::string flipAlgorithm; // walksat, novelty
 
     MCSettings();
 };
@@ -51,7 +54,7 @@ struct MCState {
 
     MCState(MCSettings&, SatProblem&, Assignment&);
     template<class S> int rolloutValue(MCTSInstance<S>&);
-    template<class S> Literal getAction(MCTSInstance<S>&);
+    template<class S> Literal getAction(MCTSInstance<S>&, bool allowExploration=true);
     template<class S> void updateAfterAction(MCTSInstance<S>&, Literal, int);
 };
 
@@ -84,6 +87,11 @@ struct MCTSInstance {
 /*
     MC Algorithms
 */
+
+Assignment applyAction(const Assignment& assign, Literal action);
+template<class S>
+Assignment applyFlipAlgorithm(MCTSInstance<S>& inst, const Assignment& assign, int nbUnassigned);
+void runRollout(MCTSInstance<>& inst, int steps);
 
 void runRollout(MCTSInstance<>& inst, int steps);
 void runMCTS(MCTSInstance<>& inst, int steps);
