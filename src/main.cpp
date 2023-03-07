@@ -69,10 +69,10 @@ int main(int argc, char** argv) {
     string dataPath = "data/test";
     MCSettings settings{};
 
-    vector<string> methodsList{"rollout", "mcts", "nested_mc"};
+    vector<string> methodsList{"rollout", "mcts", "nested_mc", "seq_halving"};
     ValuesConstraint<string> methodsConstraint(methodsList);
-    vector<string> mctsBehaviors{"once", "full", "discounted"};
-    ValuesConstraint<string> mctsBehaviorsConstraint(mctsBehaviors);
+    vector<string> behaviors{"once", "full", "discounted"};
+    ValuesConstraint<string> behaviorsConstraint(behaviors);
     vector<string> flipAlgorithms{"walksat", "novelty"};
     ValuesConstraint<string> flipAlgorithmsConstraint(flipAlgorithms);
     vector<int> heuristicList{0, 1, 2, 3};
@@ -124,12 +124,12 @@ int main(int argc, char** argv) {
             "UCB exploration parameter (c)",
             false, settings.ucbCExplo, "float", cmd);
         
-    	ValueArg<string> mctsBehaviorArg("", "mcts_behavior",
+    	ValueArg<string> behaviorArg("", "behavior",
             "MCTS behavior (once only run from the root, discounted is faster than full)",
-            false, settings.mctsBehavior, &mctsBehaviorsConstraint, cmd);
+            false, settings.behavior, &behaviorsConstraint, cmd);
         
     	ValueArg<int> stepsArg("n", "steps",
-            "Number of steps for the MCTS algorithm",
+            "Number of steps for the MCTS algorithm, budget for the Sequential Halving algorithm, number of repeats of the NMCS or rollout algorithms",
             false, settings.steps, "integer", cmd);
         
     	ValueArg<int> nmcsDepthArg("d", "depth",
@@ -155,7 +155,7 @@ int main(int argc, char** argv) {
         settings.walkEps = walkEpsArg.getValue();
 
         settings.ucbCExplo = ucbCExploArg.getValue();
-        settings.mctsBehavior = mctsBehaviorArg.getValue();
+        settings.behavior = behaviorArg.getValue();
         settings.steps = stepsArg.getValue();
         settings.nmcsDepth = nmcsDepthArg.getValue();
 
@@ -187,11 +187,13 @@ int main(int argc, char** argv) {
 
         auto startClock = chrono::high_resolution_clock::now();
         if (method == "rollout") {
-            runRollout(inst, 1);
+            runRollout(inst);
         } else if (method == "mcts") {
-            runMCTS(inst, settings.steps);
+            runMCTS(inst);
         } else if (method == "nested_mc") {
-            runNMCS(inst, inst.pb.freeAssignment(), settings.nmcsDepth);
+            runNMCS(inst);
+        } else if (method == "seq_halving") {
+            runSeqHalving(inst);
         }
         auto stopClock = chrono::high_resolution_clock::now();
         auto runDuration = duration_cast<chrono::milliseconds>(stopClock - startClock);

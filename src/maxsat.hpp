@@ -8,7 +8,8 @@ struct Literal {
     int varId;
     bool isTrue;
 };
-bool operator==(const Literal& a, const Literal& b);
+bool operator==(const Literal&, const Literal&);
+bool operator<(const Literal&, const Literal&);
 
 using Value = signed char;
 using Clause = std::vector<Literal>;

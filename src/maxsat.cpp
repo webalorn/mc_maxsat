@@ -16,6 +16,9 @@ using namespace std;
 bool operator==(const Literal& a, const Literal& b) {
     return a.varId == b.varId && a.isTrue == b.isTrue;
 }
+bool operator<(const Literal& a, const Literal& b) {
+    return a.varId < b.varId || (a.varId == b.varId && a.isTrue < b.isTrue);
+}
 
 SatProblem::SatProblem(vector<Clause>& initClauses, int initNVars) {
     clauses = initClauses;

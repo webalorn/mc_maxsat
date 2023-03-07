@@ -29,7 +29,7 @@ struct MCSettings {
     float walkEps;
     double ucbCExplo;
     int steps, nmcsDepth;
-    std::string mctsBehavior;
+    std::string behavior;
     std::string flipAlgorithm; // walksat, novelty
 
     MCSettings();
@@ -45,16 +45,19 @@ struct MCState {
     int nbTimesSeen;
     int nbUnassigned;
     bool terminal;
+    int bestActionId;
 
     std::vector<Literal> nextActions;
     int nbSubExplorations;
     std::vector<int> actionsNExplorations;
     std::vector<double> actionsQValues;
+    std::vector<int> bestScoresForActions;
 
 
     MCState(MCSettings&, SatProblem&, Assignment&);
+    int getActionId(const Literal&);
     template<class S> int rolloutValue(MCTSInstance<S>&);
-    template<class S> Literal getAction(MCTSInstance<S>&, bool allowExploration=true);
+    template<class S> Literal getUCBAction(MCTSInstance<S>&, bool allowExploration=true);
     template<class S> void updateAfterAction(MCTSInstance<S>&, Literal, int);
 };
 
@@ -93,8 +96,9 @@ template<class S>
 Assignment applyFlipAlgorithm(MCTSInstance<S>& inst, const Assignment& assign, int nbUnassigned);
 void runRollout(MCTSInstance<>& inst, int steps);
 
-void runRollout(MCTSInstance<>& inst, int steps);
-void runMCTS(MCTSInstance<>& inst, int steps);
-int runNMCS(MCTSInstance<>& inst, Assignment assign, int level);
+void runRollout(MCTSInstance<>& inst);
+void runMCTS(MCTSInstance<>& inst);
+void runNMCS(MCTSInstance<>& inst);
+void runSeqHalving(MCTSInstance<>& inst);
 
 #endif

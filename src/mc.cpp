@@ -25,10 +25,11 @@ MCSettings::MCSettings(){
     walkBudgetPerVar = 2;
     walkEps = 0.2;
 
+    steps = 100; // Steps for MCTS and budget of Sequential Halving ; number of repeats for NMCS or rollout
+    behavior = "once"; // once for running only form root ; full for looping, discounted for looping faster
+
     // MCTS only
     ucbCExplo = 0.05;
-    steps = 100; // Steps for MCTS
-    mctsBehavior = "once"; // once for running only form root ; full for looping, discounted for looping faster
 
     // NMCS only
     nmcsDepth = 1;
@@ -120,10 +121,15 @@ MCState::MCState(MCSettings& settings, SatProblem& pb, Assignment& assign) {
     nbTimesSeen = 0;
     nbUnassigned = count(begin(stateAssign), end(stateAssign), UNASSIGNED);
     terminal = (nbUnassigned == 0);
+    bestActionId = -1;
 
     nextActions = nextActionsFrom(pb, assign, settings);
     nbSubExplorations = 0;
     actionsNExplorations = vector<int>(nextActions.size(), 0);
+    bestScoresForActions = vector<int>(nextActions.size(), 0);
+    for (int& score : bestScoresForActions) {
+        score = INF - (rand() % 1000000); // Large random number
+    }
     // actionsQValues = vector<double>(nextActions.size(), 0); // TODO: which starting value?
     actionsQValues = vector<double>(nextActions.size(), 1);
 }
@@ -139,8 +145,8 @@ int MCState::rolloutValue(MCTSInstance<S>& inst) {
 }
 
 template<class S>
-Literal MCState::getAction(MCTSInstance<S>& inst, bool allowExploration) {
-    int bestActionId = -1;
+Literal MCState::getUCBAction(MCTSInstance<S>& inst, bool allowExploration) {
+    int ucbBestId = -1;
     double bestUCTVal = 0;
     double ucbCExplo = allowExploration ? inst.settings.ucbCExplo : 0;
     // cerr << "Actions: ";
@@ -151,20 +157,31 @@ Literal MCState::getAction(MCTSInstance<S>& inst, bool allowExploration) {
             actionsQValues[iAction]
             + ucbCExplo * sqrt(log(N_tot) / (N_c + 1.))
         );
-        if (bestActionId == -1 || bestUCTVal < uctVal) {
+        if (ucbBestId == -1 || bestUCTVal < uctVal) {
             bestUCTVal = uctVal;
-            bestActionId = iAction;
+            ucbBestId = iAction;
         }
         // cerr << nextActions[iAction] << " (" << uctVal << ") ";
         // cerr << "[N_c=" << N_c << ", N_tot=" << N_tot << ", q=" << actionsQValues[iAction] << "] ";
     }
     // cerr << endl << endl;
-    return nextActions[bestActionId];
+    return nextActions[ucbBestId];
+}
+
+int MCState::getActionId(const Literal& action) {
+    int actionId = -1;
+    for (int i = 0; i < (int)nextActions.size(); i++) {
+        if (action == nextActions[i]) {
+            actionId = i;
+        }
+    }
+    assert((actionId >= 0));
+    return actionId;
 }
 
 template<class S>
 void MCState::updateAfterAction(MCTSInstance<S>& inst, Literal action, int score) {
-    int actionId = -1;
+    int actionId = this->getActionId(action);
     for (int i = 0; i < (int)nextActions.size(); i++) {
         if (action == nextActions[i]) {
             actionId = i;
@@ -236,8 +253,9 @@ Assignment applyFlipAlgorithm(MCTSInstance<S>& inst, const Assignment& assign, i
 }
 
 
-void runRollout(MCTSInstance<>& inst, int steps) {
+void runRollout(MCTSInstance<>& inst) {
     auto assign = inst.pb.freeAssignment();
+    int steps = inst.settings.steps;
     for (int iStep = 0; iStep < steps; iStep++) {
         MCState* state = inst.get(assign);
         state->rolloutValue(inst);
@@ -252,7 +270,7 @@ int MCTSearchDfs(MCTSInstance<>& inst, Assignment& assign) {
     if (state->terminal || state->nbTimesSeen == 1) {
         return state->rolloutValue(inst);
     }
-    Literal action = state->getAction(inst);
+    Literal action = state->getUCBAction(inst);
     // cerr << "Take action " << action << endl;
     auto nextAssign = applyAction(assign, action);
     int score = MCTSearchDfs(inst, nextAssign);
@@ -260,10 +278,11 @@ int MCTSearchDfs(MCTSInstance<>& inst, Assignment& assign) {
     return score;
 }
 
-void runMCTS(MCTSInstance<>& inst, int steps) {
+void runMCTS(MCTSInstance<>& inst) {
+    int steps = inst.settings.steps;
     auto assign = inst.pb.freeAssignment();
-    bool discounted = (inst.settings.mctsBehavior == "discounted");
-    bool once = (inst.settings.mctsBehavior == "once");
+    bool discounted = (inst.settings.behavior == "discounted");
+    bool once = (inst.settings.behavior == "once");
 
     MCState* state = inst.get(assign);
     while (!state->terminal) {
@@ -276,13 +295,13 @@ void runMCTS(MCTSInstance<>& inst, int steps) {
             break;
         }
         // Take action
-        Literal action = state->getAction(inst, false); // No exploration
+        Literal action = state->getUCBAction(inst, false); // No exploration
         assign = applyAction(assign, action);
         state = inst.get(assign);
     }
 }
 
-int runNMCS(MCTSInstance<>& inst, Assignment assign, int level) {
+int NMCS(MCTSInstance<>& inst, Assignment assign, int level) {
     MCState* state = inst.get(assign);
     if (state->terminal || level <= 0) {
         return state->rolloutValue(inst);
@@ -293,7 +312,7 @@ int runNMCS(MCTSInstance<>& inst, Assignment assign, int level) {
         Assignment bestNextAssign;
         for (Literal action : state->nextActions) {
             Assignment nextAssign = applyAction(assign, action);
-            int actionScore = runNMCS(inst, nextAssign, level-1);
+            int actionScore = NMCS(inst, nextAssign, level-1);
             if (actionScore < bestActionScore) {
                 bestActionScore = actionScore;
                 bestNextAssign = nextAssign;
@@ -304,6 +323,84 @@ int runNMCS(MCTSInstance<>& inst, Assignment assign, int level) {
         state = inst.get(assign);
     }
     return bestSeqScore;
+}
+
+void runNMCS(MCTSInstance<>& inst) {
+    for (int step = 0; step < inst.settings.steps; step++) {
+        NMCS(inst, inst.pb.freeAssignment(), inst.settings.nmcsDepth);
+    }
+}
+
+int seqHalving(MCTSInstance<>& inst, Assignment assign, int budget) { 
+    MCState* state = inst.get(assign);
+    int bestScore = INF;
+
+    // If no budget or terminal, use all the remaining budget on rollouts
+    // if (state->terminal || budget <= 1) {
+    if (state->terminal || budget < state->nextActions.size()) {
+        // for (int step = 0; step < max(budget, 1); step++) {
+        for (int step = 0; step < budget; step++) {
+            bestScore = min(bestScore, state->rolloutValue(inst));
+        }
+        return bestScore;
+    }
+    state->nbTimesSeen += budget;
+    
+    // Else, split the budget between runs
+    vector<pair<int, int>> movesScores;
+    for (int iAction = 0; iAction < (int)state->nextActions.size(); iAction++) {
+        movesScores.push_back({state->bestScoresForActions[iAction], iAction});
+    }
+    sort(rbegin(movesScores), rend(movesScores)); // Sort in reverse order to evaluate unseen moves first
+    while (movesScores.size() > 1) {
+        int loopBudget = budget / ceil(log2(movesScores.size()) + 1);
+        budget -= loopBudget;
+        for (int iMove = 0; iMove < (int)movesScores.size(); iMove++) {
+            int callBudget = loopBudget / (movesScores.size() - iMove);
+            loopBudget -= callBudget;
+
+            int iAction = movesScores[iMove].second;
+            auto callAssign = applyAction(assign, state->nextActions[iAction]);
+            int callScore = seqHalving(inst, callAssign, callBudget);
+            
+            // Update best scores
+            movesScores[iMove].first = min(movesScores[iMove].first, callScore);
+            state->bestScoresForActions[iAction] = movesScores[iMove].first;
+            bestScore = min(bestScore, callScore);
+        }
+        sort(begin(movesScores), end(movesScores));
+        int nKeep = movesScores.size()/2;
+        while (movesScores.size() > nKeep) {
+            movesScores.pop_back();
+        }
+    }
+    auto nextAssign = applyAction(assign, state->nextActions[movesScores[0].second]);
+    state->bestActionId = movesScores[0].second;
+    bestScore = min(bestScore, seqHalving(inst,nextAssign, budget));
+    return bestScore;
+}
+
+void runSeqHalving(MCTSInstance<>& inst) {
+    int budget = inst.settings.steps;
+    auto assign = inst.pb.freeAssignment();
+    bool discounted = (inst.settings.behavior == "discounted");
+    bool once = (inst.settings.behavior == "once");
+
+    MCState* state = inst.get(assign);
+    while (!state->terminal) {
+        // Compute number of steps to do if a discount is applied
+        int discount = discounted ? state->nbTimesSeen : 0;
+        seqHalving(inst, assign, budget - discount);
+
+        if (once) {
+            break;
+        }
+        // Take action
+        assert((state->bestActionId >= 0));
+        Literal action = state->nextActions[state->bestActionId];
+        assign = applyAction(assign, action);
+        state = inst.get(assign);
+    }
 }
 
 /*
