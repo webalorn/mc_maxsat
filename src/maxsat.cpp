@@ -7,6 +7,7 @@
 #include <queue>
 #include <iostream>
 #include <tuple>
+#include <unordered_set>
 
 #include "maxsat.hpp"
 #include "util.hpp"
@@ -27,8 +28,12 @@ SatProblem::SatProblem(vector<Clause>& initClauses, int initNVars) {
     clauses = initClauses;
     nClauses = clauses.size();
     nVars = initNVars;
+    totalWeight = 0;
     for (const Clause& cls: clauses) {
-        for (const Literal& lit : cls) {
+
+        totalWeight += cls.weight; // Calculate Total Weight
+        
+        for (const Literal& lit : cls.literals) {
             nVars = max(nVars, lit.varId+1);
         }
     }
@@ -36,7 +41,7 @@ SatProblem::SatProblem(vector<Clause>& initClauses, int initNVars) {
     clausesUsingVar = vector<vector<int>>(nVars, vector<int>());
     clausesUsingLit = vector<array<vector<int>, 2>>(nVars, {vector<int>(), vector<int>()});
     for (int iCls = 0; iCls < nClauses; iCls++) {
-        for (const Literal& lit : clauses[iCls]) {
+        for (const Literal& lit : clauses[iCls].literals) {
             clausesUsingVar[lit.varId].push_back(iCls);
             clausesUsingLit[lit.varId][lit.isTrue].push_back(iCls);
         }
@@ -57,7 +62,7 @@ vector<int> SatProblem::unverifiedClauses(const Assignment& assign) const {
     vector<int> unverified;
     for (int iCls = 0; iCls < (int)this->nClauses; iCls++) {
         bool verified = false;
-        for (const Literal& lit : this->clauses[iCls]) {
+        for (const Literal& lit : this->clauses[iCls].literals) {
             if (assign[lit.varId] == lit.isTrue) {
                 verified = true;
                 break;
@@ -70,10 +75,14 @@ vector<int> SatProblem::unverifiedClauses(const Assignment& assign) const {
     return unverified;
 }
 
-int SatProblem::score(const Assignment& assign) const {
-    return this->unverifiedClauses(assign).size();
+double SatProblem::score(const Assignment& assign) const {
+    //return this->unverifiedClauses(assign).size();
+    double sum = 0;
+    for (int iCls : this->unverifiedClauses(assign)) {
+        sum += this->clauses[iCls].weight;
+    }
+    return sum;
 }
-
 
 /*
     Assignment Heuristics
@@ -96,7 +105,7 @@ Assignment assignStatic(const SatProblem& pb, const Assignment& prevAssign, stri
     iota(begin(varOrder), end(varOrder), 0);
 
     for (const Clause& cls : pb.clauses) {
-        for (const Literal& lit : cls) {
+        for (const Literal& lit : cls.literals) {
             nbTimesAs[lit.varId][lit.isTrue]++;
         }
     }
@@ -138,7 +147,7 @@ Assignment assignDynamic(const SatProblem& pb, const Assignment& prevAssign, boo
 
     // Init
     for (int iCls = 0; iCls < (int)pb.nClauses; iCls++) {
-        for (const Literal& lit : pb.clauses[iCls]) {
+        for (const Literal& lit : pb.clauses[iCls].literals) {
             nbOccLit[lit.varId][lit.isTrue] += 1;
             clausesUsingVar[lit.varId].push_back(iCls);
         }
@@ -174,7 +183,7 @@ Assignment assignDynamic(const SatProblem& pb, const Assignment& prevAssign, boo
                 if (!isClauseVerified[iCls]) {
                     isClauseVerified[iCls] = true;
                     // Update literals that are in this clause
-                    for (const Literal& lit : pb.clauses[iCls]) {
+                    for (const Literal& lit : pb.clauses[iCls].literals) {
                         nbOccLit[lit.varId][lit.isTrue] -= 1;
                         if (assign[lit.varId] == UNASSIGNED && !scoreIsId) {
                             // If the score changed for the lit variable, update it
@@ -219,7 +228,7 @@ Assignment applyWalkSat(const SatProblem& pb, const Assignment& prevAssign, int 
     
     // Compute the number of literals satifying each clause
     for (int iCls = 0; iCls < pb.nClauses; iCls++) {
-        for (const Literal& lit : pb.clauses[iCls]) {
+        for (const Literal& lit : pb.clauses[iCls].literals) {
             if (assign[lit.varId] == lit.isTrue) {
                 clsNbLitTrue[iCls] += 1;
             }
@@ -249,7 +258,7 @@ Assignment applyWalkSat(const SatProblem& pb, const Assignment& prevAssign, int 
                 break;
             }
             const Clause& clsSwap = pb.clauses[unverified[rand() % unverified.size()]];
-            for (const Literal& lit : clsSwap) {
+            for (const Literal& lit : clsSwap.literals) {
                 consideredVars.push_back(lit.varId);
             }
         }
@@ -306,6 +315,115 @@ Assignment applyWalkSat(const SatProblem& pb, const Assignment& prevAssign, int 
 
         if (nbUnverified < bestNbUnverified) {
             bestNbUnverified = nbUnverified;
+            bestAssign = assign;
+        }
+    }
+    return bestAssign;
+}
+
+Assignment applyMaxWalkSat(const SatProblem& pb, const Assignment& prevAssign, int flipBudget, float randEps, bool applyNovelty) {
+    /*float threshold*/
+    
+    /* Every variable should be assigned prior to calling this function */
+    auto assign = prevAssign;
+    vector<int> clsNbLitTrue(pb.nClauses, 0);
+    //int nbUnverified = 0; // Number of unverified clauses
+    
+    double verifiedScore = 0;
+    
+    // Compute the number of literals satifying each clause
+    for (int iCls = 0; iCls < pb.nClauses; iCls++) {
+        for (const Literal& lit : pb.clauses[iCls].literals) {
+            if (assign[lit.varId] == lit.isTrue) {
+                clsNbLitTrue[iCls] += 1;
+            }
+        }
+        if (clsNbLitTrue[iCls] != 0) {
+            verifiedScore += pb.clauses[iCls].weight;
+        }
+    }
+    //int bestNbUnverified = nbUnverified;
+    double bestVerifiedScore = verifiedScore;
+    auto bestAssign = assign;
+    int lastFlippedVar = -1;
+
+    // Loop over the flip budget
+    for (int iFlip = 0; iFlip < flipBudget; iFlip++) {
+        vector<int> consideredVars;
+        if (applyNovelty) {
+            consideredVars = vector<int>(pb.nVars);
+            iota(begin(consideredVars), end(consideredVars), 0);
+        } else {
+            vector<int> unverified;
+            for (int iCls = 0; iCls < pb.nClauses; iCls++) {
+                if (clsNbLitTrue[iCls] == 0) {
+                    unverified.push_back(iCls);
+                }
+            }
+            if (unverified.empty()) { // All clauses are verified \o/
+                break;
+            }
+            const Clause& clsSwap = pb.clauses[unverified[rand() % unverified.size()]];
+            for (const Literal& lit : clsSwap.literals) {
+                consideredVars.push_back(lit.varId);
+            }
+        }
+        
+        vector<tuple<double, int, int>> weightImprovVars; // (BreakScore, rand(), varId)
+        for (int iVar : consideredVars) {
+            double weightImprov = 0;
+            for (int linkedClsId : pb.clausesUsingLit[iVar][assign[iVar]]) {
+                if (clsNbLitTrue[linkedClsId] == 1) {
+                    weightImprov -= pb.clauses[linkedClsId].weight;
+                } else if (clsNbLitTrue[linkedClsId] == 0) {
+                    weightImprov += pb.clauses[linkedClsId].weight; // If the variable is set to true, it will make the clause true
+                }
+            }
+            weightImprovVars.push_back({weightImprov, rand(), iVar});
+        }
+
+        sort(begin(weightImprovVars), end(weightImprovVars));
+        reverse(begin(weightImprovVars), end(weightImprovVars)); // Descending Sort
+
+        if (weightImprovVars.size() >= 2 && get<2>(weightImprovVars[0]) == lastFlippedVar) {
+            // Don't flip twice the same variable in a row (to reduce the risk of beeing stuck in a loop)
+            swap(weightImprovVars[0], weightImprovVars[1]);
+        }
+        
+        // Remove scores that don't contribute to the minimum break score
+        // while (breakScoreVars.size() > 1 &&
+        //     breakScoreVars[breakScoreVars.size()-1].first > breakScoreVars[breakScoreVars.size()-2].first) {
+        //     breakScoreVars.pop_back();
+        // }
+        // Choose the variable to flip
+        int flipVar = -1;
+        float randValue = rand() / (float)RAND_MAX;
+        if (get<0>(weightImprovVars[0]) > 0) { // If the first variable improves the configuration
+            flipVar = get<2>(weightImprovVars[0]);
+        } else if (randValue < randEps) { // Sometimes, choose a random var
+            flipVar = get<2>(weightImprovVars[rand()%weightImprovVars.size()]);
+        } else { // Take the minimum breaking var
+            flipVar = get<2>(weightImprovVars[0]);
+        }
+
+        // FLIP the variable
+        lastFlippedVar = flipVar;
+        for (int linkedClsId : pb.clausesUsingLit[flipVar][assign[flipVar]]) {
+            clsNbLitTrue[linkedClsId] -= 1;
+            if (clsNbLitTrue[linkedClsId] != 0) {
+                verifiedScore += pb.clauses[linkedClsId].weight;
+            }
+        }
+        assign[flipVar] = 1 - assign[flipVar];
+        for (int linkedClsId : pb.clausesUsingLit[flipVar][assign[flipVar]]) {
+            clsNbLitTrue[linkedClsId] += 1;
+            if (clsNbLitTrue[linkedClsId] == 0) {
+                verifiedScore -= pb.clauses[linkedClsId].weight;
+            }
+        }
+
+        if (verifiedScore > bestVerifiedScore) {
+            bestVerifiedScore = verifiedScore;
             bestAssign = assign;
         }
     }

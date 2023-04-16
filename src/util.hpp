@@ -7,7 +7,7 @@
 
 #include "maxsat.hpp"
 
-static const int INF = 1e9;
+static const double INF = 1e9;
 
 static const char* C_RESET = "\033[0m";
 static const char* C_RED = "\033[31m";

@@ -11,15 +11,21 @@ struct Literal {
     bool isTrue;
     int id(const SatProblem&) const;
 };
+
+struct Clause {
+    std::vector<Literal> literals;
+    double weight;
+};
+
 bool operator==(const Literal&, const Literal&);
 bool operator<(const Literal&, const Literal&);
 
 using Value = signed char;
-using Clause = std::vector<Literal>;
 using Assignment = std::vector<Value>;
 
 struct SatProblem {
     int nVars, nClauses;
+    double totalWeight;
     std::vector<Clause> clauses;
     std::vector<std::vector<int>> clausesUsingVar;
     std::vector<std::array<std::vector<int>, 2>> clausesUsingLit;
@@ -29,7 +35,7 @@ struct SatProblem {
     Assignment freeAssignment() const;
     Assignment randomAssignment() const;
     std::vector<int> unverifiedClauses(const Assignment&) const;
-    int score(const Assignment&) const;
+    double score(const Assignment&) const;
 };
 
 const Value UNASSIGNED = -1;
@@ -56,5 +62,6 @@ Assignment assignMostFrequentLitH3Dynamic(const SatProblem&, const Assignment&);
     Algorithms
 */
 Assignment applyWalkSat(const SatProblem&, const Assignment&, int, float, bool);
+Assignment applyMaxWalkSat(const SatProblem&, const Assignment&, int, float, bool);
 
 #endif

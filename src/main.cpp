@@ -46,10 +46,14 @@ SatProblem readSatProblem(string filepath) {
                 } else {
                     clauses.push_back({});
                     parts.pop_back(); // Remove the 0 at the end
+
+                    clauses.back().weight = stof(parts.front()); // set weight value
+                    parts.erase(parts.begin()); // remove weight value
+                    
                     for (string& litStr : parts) {
                         int lit = stoi(litStr);
                         Literal litObj{abs(lit)-1, (lit > 0)};
-                        clauses.back().push_back(litObj);
+                        clauses.back().literals.push_back(litObj);
                     }
                 }
             }
@@ -73,7 +77,7 @@ int main(int argc, char** argv) {
     ValuesConstraint<string> methodsConstraint(methodsList);
     vector<string> behaviors{"once", "full", "discounted"};
     ValuesConstraint<string> behaviorsConstraint(behaviors);
-    vector<string> flipAlgorithms{"walksat", "novelty"};
+    vector<string> flipAlgorithms{"walksat", "novelty", "weighted_novelty", "maxwalksat"};
     ValuesConstraint<string> flipAlgorithmsConstraint(flipAlgorithms);
     vector<int> heuristicList{0, 1, 2, 3};
     ValuesConstraint<int> heuristicConstraint(heuristicList);
@@ -177,7 +181,7 @@ int main(int argc, char** argv) {
     vector<string> dataFiles;
     for (const auto& dataFile : fs::directory_iterator(dataPath)) {
         string dataFilePath = dataFile.path();
-        if (split(dataFilePath, '.').back() == "cnf") {
+        if (split(dataFilePath, '.').back() == "wcnf") {
             dataFiles.push_back(dataFilePath);
         }
     }
@@ -189,6 +193,7 @@ int main(int argc, char** argv) {
     for (int iFile = 0; iFile < (int)dataFiles.size(); iFile++) {
         cout << "Running " << method << " on file " << (iFile+1) << "/" << dataFiles.size()
             << " [" << dataFiles[iFile] << "]" << endl;
+
 
         // Initialize the problem
         srand(settings.seed);

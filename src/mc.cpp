@@ -84,7 +84,7 @@ vector<Literal> nextActionsFrom(SatProblem& pb, const Assignment& assign, MCSett
             clauses = pb.clauses;
         }
         for (const Clause& cls : clauses) {
-            for (const Literal& lit : cls) {
+            for (const Literal& lit : cls.literals) {
                 nbTimesAs[lit.varId][lit.isTrue]++;
             }
         }
@@ -128,8 +128,8 @@ MCState::MCState(MCSettings& settings, SatProblem& pb, Assignment& assign) {
     nextActions = nextActionsFrom(pb, assign, settings);
     nbSubExplorations = 0;
     actionsNExplorations = vector<int>(nextActions.size(), 0);
-    bestScoresForActions = vector<int>(nextActions.size(), 0);
-    for (int& score : bestScoresForActions) {
+    bestScoresForActions = vector<double>(nextActions.size(), 0);
+    for (double& score : bestScoresForActions) {
         score = INF - (rand() % 1000000); // Large random number
     }
     // actionsQValues = vector<double>(nextActions.size(), 0); // TODO: which starting value?
@@ -137,7 +137,7 @@ MCState::MCState(MCSettings& settings, SatProblem& pb, Assignment& assign) {
 }
 
 template<class S>
-int MCState::rolloutValue(MCTSInstance<S>& inst) {
+double MCState::rolloutValue(MCTSInstance<S>& inst) {
     auto nextAssign = applyHeuristic(inst.pb, stateAssign, inst.settings);
     nextAssign = applyFlipAlgorithm(inst, nextAssign, nbUnassigned);
     int score = inst.pb.score(nextAssign);
@@ -191,7 +191,8 @@ void MCState::updateAfterAction(MCTSInstance<S>& inst, Literal action, int score
     }
     assert((actionId >= 0));
     double N_c = actionsNExplorations[actionId];
-    double score_value = (double)(inst.pb.nClauses - score) / inst.pb.nClauses; // Fraction of OK clauses
+    //double score_value = (double)(inst.pb.nClauses - score) / inst.pb.nClauses; // Fraction of OK clauses
+    double score_value = (double)(inst.pb.totalWeight - score) / inst.pb.totalWeight; // Fraction of total Weight
     actionsQValues[actionId] = (N_c * actionsQValues[actionId] + score_value) / (N_c + 1.);
     actionsNExplorations[actionId] += 1;
     nbSubExplorations += 1;
@@ -269,6 +270,10 @@ Assignment applyFlipAlgorithm(MCTSInstance<S>& inst, const Assignment& assign, i
         nextAssign = applyWalkSat(inst.pb, assign, flipBudget, inst.settings.walkEps, true);
     } else if (inst.settings.flipAlgorithm == "walksat") {
         nextAssign = applyWalkSat(inst.pb, assign, flipBudget, inst.settings.walkEps, false);
+    } else if (inst.settings.flipAlgorithm == "weighted_novelty") {
+        nextAssign = applyMaxWalkSat(inst.pb, assign, flipBudget, inst.settings.walkEps, true);
+    } else if (inst.settings.flipAlgorithm == "maxwalksat") {
+        nextAssign = applyMaxWalkSat(inst.pb, assign, flipBudget, inst.settings.walkEps, false);
     } else {
         assert((false));
     }
@@ -354,9 +359,9 @@ void runNMCS(MCTSInstance<>& inst) {
     }
 }
 
-int seqHalving(MCTSInstance<>& inst, Assignment assign, int budget) { 
+double seqHalving(MCTSInstance<>& inst, Assignment assign, int budget) { 
     MCState* state = inst.get(assign);
-    int bestScore = INF;
+    double bestScore = INF;
 
     // If no budget or terminal, use all the remaining budget on rollouts
     // if (state->terminal || budget <= 1) {
@@ -386,10 +391,10 @@ int seqHalving(MCTSInstance<>& inst, Assignment assign, int budget) {
             state->actionsNExplorations[iAction] += callBudget;
             const Literal& action = state->nextActions[iAction];
             auto callAssign = applyAction(assign, action);
-            int callScore = seqHalving(inst, callAssign, callBudget);
+            double callScore = seqHalving(inst, callAssign, callBudget);
             
             // Update best scores
-            int actionBestScore = min(callScore, state->bestScoresForActions[iAction]);
+            double actionBestScore = min(callScore, state->bestScoresForActions[iAction]);
             // double amafScore = actionBestScore + inst.settings.amaf * inst.amafGet(action, inst.get(assign)->nbTimesSeen);
             double amafScore = inst.amafGet(action, actionBestScore, state->actionsNExplorations[iAction]);
             inst.amafAddResult(action, callScore, callBudget);

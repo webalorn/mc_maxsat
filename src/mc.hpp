@@ -54,12 +54,12 @@ struct MCState {
     int nbSubExplorations;
     std::vector<int> actionsNExplorations;
     std::vector<double> actionsQValues;
-    std::vector<int> bestScoresForActions;
+    std::vector<double> bestScoresForActions;
 
 
     MCState(MCSettings&, SatProblem&, Assignment&);
     int getActionId(const Literal&);
-    template<class S> int rolloutValue(MCTSInstance<S>&);
+    template<class S> double rolloutValue(MCTSInstance<S>&);
     template<class S> Literal getUCBAction(MCTSInstance<S>&, bool allowExploration=true);
     template<class S> void updateAfterAction(MCTSInstance<S>&, Literal, int);
 };
@@ -81,7 +81,7 @@ struct MCTSInstance {
     SatProblem pb;
     MCTree<S> tree;
 
-    int minUnverified;
+    double minUnverified;
     Assignment bestAssignment;
 
     std::vector<int> amafCount;
