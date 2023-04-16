@@ -207,7 +207,7 @@ template<class S>
 MCTSInstance<S>::MCTSInstance(const MCSettings& _settings, const SatProblem& _pb)
     :settings(_settings), pb(_pb), tree() {
     bestAssignment = pb.randomAssignment();
-    minUnverified = pb.score(bestAssignment);
+    minUnverifiedWeight = pb.score(bestAssignment);
     amafCount = vector<int>(pb.nVars*2, 0);
     amafMin = vector<double>(pb.nVars*2, INF);
 }
@@ -240,12 +240,12 @@ S* MCTSInstance<S>::get(Assignment& assign) {
 }
 
 template<class S>
-void MCTSInstance<S>::updateBest(Assignment& assign, int nbUnverified) {
-    if (nbUnverified < 0) {
-        nbUnverified = pb.score(assign);
+void MCTSInstance<S>::updateBest(Assignment& assign, int unverifiedWeight) {
+    if (unverifiedWeight < 0) {
+        unverifiedWeight = pb.score(assign);
     }
-    if (nbUnverified < minUnverified) {
-        minUnverified = nbUnverified;
+    if (unverifiedWeight < minUnverifiedWeight) {
+        minUnverifiedWeight = unverifiedWeight;
         bestAssignment = assign;
     }
 }

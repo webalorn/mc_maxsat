@@ -62,6 +62,10 @@ SatProblem readSatProblem(string filepath) {
     return SatProblem(clauses, nVars);
 }
 
+int getUnverifiedCount(SatProblem& inst, const Assignment& assign) {
+    return inst.unverifiedClauses(assign).size();
+}
+
 int main(int argc, char** argv) {
     cout << C_CYAN;
     for (const string& part : vector<string>(argv, argv+argc)) {
@@ -189,6 +193,7 @@ int main(int argc, char** argv) {
     cout << "Using data from " << dataPath << " (" << dataFiles.size() << " test files)" << endl;
     double totalScore = 0;
     double totalTime = 0;
+    //int totalUnverified = 0;
 
     for (int iFile = 0; iFile < (int)dataFiles.size(); iFile++) {
         cout << "Running " << method << " on file " << (iFile+1) << "/" << dataFiles.size()
@@ -214,14 +219,19 @@ int main(int argc, char** argv) {
         auto runDuration = duration_cast<chrono::milliseconds>(stopClock - startClock);
         double runTime = runDuration.count() / 1000.0;
 
-        totalScore += inst.minUnverified;
+        //int unverifiedCount = getUnverifiedCount(inst.pb, inst.bestAssignment);
+        //totalUnverified += unverifiedCount;
+        totalScore += inst.minUnverifiedWeight;
         totalTime += runTime;
-        cout << "score=" << inst.minUnverified
+
+        cout << "score=" << inst.minUnverifiedWeight //<< "  clauses=" << unverifiedCount
             << "  (avg=" << C_GREEN << setprecision(6) << (totalScore / (iFile+1)) << C_RESET
             << ", avg_time=" << C_CYAN << setprecision(3) << (totalTime / (iFile+1)) << "s" << C_RESET
             << ")" << endl;
     }
+
     cout << "Final average score is " << C_GREEN << setprecision(6) << (totalScore / dataFiles.size()) << C_RESET
+        //<< "  Average Clauses: " << C_GREEN << setprecision(6) << (totalUnverified / dataFiles.size()) << C_RESET
         << "    (avg_time=" << C_CYAN << setprecision(3) << (totalTime / dataFiles.size()) << "s" << C_RESET
         << ", total_time=" << C_CYAN << ((int)totalTime) << "s" << C_RESET
         << ")" << endl;

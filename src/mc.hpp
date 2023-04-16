@@ -81,7 +81,7 @@ struct MCTSInstance {
     SatProblem pb;
     MCTree<S> tree;
 
-    double minUnverified;
+    double minUnverifiedWeight;
     Assignment bestAssignment;
 
     std::vector<int> amafCount;
